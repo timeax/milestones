@@ -1,11 +1,13 @@
 import type {
   DependencyAcceptanceSnapshot,
+  DependencyEvaluation,
   DependencyId,
   EvaluationReason,
   Milestone,
   MilestoneDependency,
   MilestoneGateState,
   MilestoneGraphNode,
+  MilestoneGraphEvaluation,
   MilestoneGraphSnapshot,
   MilestoneId,
 } from "../model/domain.js";
@@ -68,6 +70,7 @@ export function detectCycles(graph: MilestoneGraphSnapshot): readonly (readonly 
   const adjacency = new Map<MilestoneId, MilestoneId[]>();
   for (const id of graph.milestones.keys()) adjacency.set(id, []);
   for (const dependency of graph.dependencies) adjacency.get(dependency.milestoneId)?.push(dependency.dependsOnMilestoneId);
+  for (const values of adjacency.values()) values.sort((left, right) => left.localeCompare(right));
   const state = new Map<MilestoneId, 0 | 1 | 2>();
   const path: MilestoneId[] = [];
   const unique = new Map<string, readonly MilestoneId[]>();
@@ -83,8 +86,8 @@ export function detectCycles(graph: MilestoneGraphSnapshot): readonly (readonly 
     }
     path.pop(); state.set(id, 2);
   };
-  for (const id of graph.milestones.keys()) if ((state.get(id) ?? 0) === 0) visit(id);
-  return [...unique.values()];
+  for (const id of [...graph.milestones.keys()].sort((left, right) => left.localeCompare(right))) if ((state.get(id) ?? 0) === 0) visit(id);
+  return [...unique.values()].sort((left, right) => left.join("|").localeCompare(right.join("|")));
 }
 
 export function evaluateMilestoneDependencies(milestone: Milestone, graph?: MilestoneGraphSnapshot): { readonly snapshots: readonly DependencyAcceptanceSnapshot[]; readonly reasons: readonly EvaluationReason[] } {
@@ -101,7 +104,43 @@ export function evaluateMilestoneDependencies(milestone: Milestone, graph?: Mile
 
 export function findUnlockedMilestoneIds(graph: MilestoneGraphSnapshot): readonly MilestoneId[] {
   assertValidGraph(graph);
-  return [...graph.milestones.keys()].filter((id) => graph.dependencies.filter((dependency) => dependency.milestoneId === id && dependency.blocking).every((dependency) => evaluateDependency(dependency, graph)));
+  return evaluateGraphUnchecked(graph).unblockedMilestoneIds;
+}
+
+export function blockedMilestoneIds(graph: MilestoneGraphSnapshot): readonly MilestoneId[] {
+  assertValidGraph(graph);
+  return evaluateGraphUnchecked(graph).blockedMilestoneIds;
+}
+
+export function readyMilestoneIds(graph: MilestoneGraphSnapshot): readonly MilestoneId[] {
+  assertValidGraph(graph);
+  return evaluateGraphUnchecked(graph).runnableMilestoneIds;
+}
+
+export function evaluateGraph(graph: MilestoneGraphSnapshot): MilestoneGraphEvaluation {
+  assertValidGraph(graph);
+  return evaluateGraphUnchecked(graph);
+}
+
+function evaluateGraphUnchecked(graph: MilestoneGraphSnapshot): MilestoneGraphEvaluation {
+  const dependencies: DependencyEvaluation[] = [...graph.dependencies]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((dependency) => ({
+      dependencyId: dependency.id,
+      milestoneId: dependency.milestoneId,
+      dependsOnMilestoneId: dependency.dependsOnMilestoneId,
+      blocking: dependency.blocking,
+      satisfied: evaluateDependency(dependency, graph),
+    }));
+  const ids = [...graph.milestones.keys()].sort((left, right) => left.localeCompare(right));
+  const blocked = new Set(dependencies.filter((value) => value.blocking && !value.satisfied).map((value) => value.milestoneId));
+  const unblockedMilestoneIds = ids.filter((id) => !blocked.has(id));
+  return {
+    dependencies,
+    blockedMilestoneIds: ids.filter((id) => blocked.has(id)),
+    unblockedMilestoneIds,
+    runnableMilestoneIds: unblockedMilestoneIds.filter((id) => !graph.milestones.get(id)!.gates.completed),
+  };
 }
 
 export function downstreamImpact(graph: MilestoneGraphSnapshot, changedMilestoneId: MilestoneId): readonly MilestoneId[] {
@@ -116,7 +155,12 @@ export function downstreamImpact(graph: MilestoneGraphSnapshot, changedMilestone
     }
   }
   result.delete(changedMilestoneId);
-  return [...result];
+  return [...result].sort((left, right) => left.localeCompare(right));
+}
+
+export function affectedMilestoneIds(graph: MilestoneGraphSnapshot, invalidatedMilestoneId: MilestoneId): readonly MilestoneId[] {
+  assertValidGraph(graph);
+  return downstreamImpact(graph, invalidatedMilestoneId);
 }
 
 export function dependencyById(graph: MilestoneGraphSnapshot, id: DependencyId): MilestoneDependency | undefined {

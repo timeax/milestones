@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MilestoneEditor, asDependencyId, createGraphSnapshot, detectCycles, downstreamImpact, evaluateDependency, findUnlockedMilestoneIds, graphNodeFromMilestone, validateGraph, type MilestoneDependency, type MilestoneGraphSnapshot } from "../src/index.js";
+import { MilestoneEditor, asDependencyId, createGraphSnapshot, detectCycles, downstreamImpact, evaluateDependency, findUnlockedMilestoneIds, validateGraph, type MilestoneDependency, type MilestoneGraphSnapshot } from "../src/index.js";
 import { create } from "./helpers.js";
 
 describe("technical dependency graph", () => {
@@ -26,7 +26,7 @@ describe("technical dependency graph", () => {
       { id: asDependencyId("dup"), milestoneId: a.id, dependsOnMilestoneId: b.id, gate: { type: "accepted" }, blocking: true },
       { id: asDependencyId("missing"), milestoneId: b.id, dependsOnMilestoneId: a.id, gate: { type: "criterion", criterionId: "absent" as never, requiredState: "verified" }, blocking: true },
     ];
-    const graph: MilestoneGraphSnapshot = { milestones: new Map([[a.id, graphNodeFromMilestone(a)], [b.id, graphNodeFromMilestone(b)]]), dependencies };
+    const graph: MilestoneGraphSnapshot = createGraphSnapshot([a, b], dependencies);
     const codes = validateGraph(graph).map((issue) => issue.code);
     expect(codes).toEqual(expect.arrayContaining(["self_dependency", "duplicate_dependency", "missing_gate_target", "dependency_cycle"]));
     expect(detectCycles(graph).length).toBeGreaterThan(0);

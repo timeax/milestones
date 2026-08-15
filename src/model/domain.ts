@@ -155,6 +155,8 @@ export interface ApprovalStage {
   readonly scope: "milestone" | "criteria" | "deliverables";
   readonly criterionIds?: readonly CriterionId[];
   readonly deliverableRequirementIds?: readonly DeliverableRequirementId[];
+  /** Opaque host-owned selector; the milestone SDK stores but never resolves it. */
+  readonly authorityRef?: string;
 }
 export interface MilestoneApprovalPolicy { readonly stages: readonly ApprovalStage[] }
 export type ApprovalPolicySnapshot = MilestoneApprovalPolicy;
@@ -307,6 +309,19 @@ export interface MilestoneGateState {
 }
 export interface MilestoneGraphNode { readonly id: MilestoneId; readonly revisionId: MilestoneRevisionId; readonly gates: MilestoneGateState }
 export interface MilestoneGraphSnapshot { readonly milestones: ReadonlyMap<MilestoneId, MilestoneGraphNode>; readonly dependencies: readonly MilestoneDependency[] }
+export interface DependencyEvaluation {
+  readonly dependencyId: DependencyId;
+  readonly milestoneId: MilestoneId;
+  readonly dependsOnMilestoneId: MilestoneId;
+  readonly blocking: boolean;
+  readonly satisfied: boolean;
+}
+export interface MilestoneGraphEvaluation {
+  readonly dependencies: readonly DependencyEvaluation[];
+  readonly blockedMilestoneIds: readonly MilestoneId[];
+  readonly unblockedMilestoneIds: readonly MilestoneId[];
+  readonly runnableMilestoneIds: readonly MilestoneId[];
+}
 
 export type ReopenEffect = "invalidate_completion" | "invalidate_acceptance_and_completion";
 export type ReopenCause =
@@ -320,7 +335,7 @@ export type ReopenCause =
 export interface ReopenRequest { readonly effect: ReopenEffect; readonly reason: string; readonly actor?: ActorRef; readonly cause?: ReopenCause }
 
 export type EvaluationReasonCode =
-  | "missing_criterion" | "missing_deliverable" | "unsatisfied_dependency" | "blocking_challenge"
+  | "missing_criterion" | "missing_deliverable" | "missing_acceptance" | "unsatisfied_dependency" | "blocking_challenge"
   | "incomplete_review" | "pending_approval" | "artifact_requirement_missing" | "artifact_submission_missing"
   | "artifact_verification_missing" | "artifact_verification_failed" | "artifact_version_missing" | "profile_feature_disabled";
 export interface EvaluationReason { readonly code: EvaluationReasonCode; readonly subjectId: string; readonly message: string }
@@ -343,6 +358,8 @@ export type MilestoneChange =
   | { readonly type: "challenge_changed"; readonly challengeId: ChallengeId }
   | { readonly type: "review_changed"; readonly reviewId: ReviewId }
   | { readonly type: "approval_recorded"; readonly approvalRecordId: ApprovalRecordId }
+  | { readonly type: "approval_policy_changed"; readonly approvalStageId: ApprovalStageId }
+  | { readonly type: "profile_changed"; readonly profile: MilestoneProfileRef }
   | { readonly type: "revised"; readonly revisionId: MilestoneRevisionId }
   | { readonly type: "accepted"; readonly acceptanceId: AcceptanceId }
   | { readonly type: "completed"; readonly completionId: CompletionId }
@@ -374,10 +391,14 @@ export type ReviewChangedEvent = EventBase<"review.changed", { readonly reviewId
 export type ReviewCompletedEvent = EventBase<"review.completed", { readonly reviewId: ReviewId; readonly result: ReviewResult }>;
 export type ApprovalRecordedEvent = EventBase<"approval.recorded", { readonly record: ApprovalGrantedRecord | ApprovalRejectedRecord | ApprovalWaivedRecord }>;
 export type ApprovalRevokedEvent = EventBase<"approval.revoked", { readonly record: ApprovalRevokedRecord }>;
+export type ApprovalStageAddedEvent = EventBase<"approval_stage.added", { readonly stage: ApprovalStage }>;
+export type ApprovalStageChangedEvent = EventBase<"approval_stage.changed", { readonly stage: ApprovalStage }>;
+export type ApprovalStageRemovedEvent = EventBase<"approval_stage.removed", { readonly approvalStageId: ApprovalStageId }>;
+export type ProfileChangedEvent = EventBase<"profile.changed", { readonly profile: MilestoneProfileRef }>;
 export type MilestoneAcceptedEvent = EventBase<"milestone.accepted", { readonly acceptance: MilestoneAcceptance }>;
 export type MilestoneCompletedEvent = EventBase<"milestone.completed", { readonly completion: MilestoneCompletion }>;
 export type MilestoneReopenedEvent = EventBase<"milestone.reopened", { readonly effect: ReopenEffect; readonly reason: string; readonly cause?: ReopenCause }>;
-export type MilestoneEvent = MilestoneCreatedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
+export type MilestoneEvent = MilestoneCreatedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | ApprovalStageAddedEvent | ApprovalStageChangedEvent | ApprovalStageRemovedEvent | ProfileChangedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
 
 export interface MilestoneEditResult {
   readonly milestone: Milestone;

@@ -15,7 +15,9 @@ export type MilestoneErrorCode =
   | "REVISION_REQUIRED"
   | "PROFILE_MISMATCH"
   | "ARTIFACT_CONTEXT_INVALID"
+  | "AUTHORIZATION_DENIED"
   | "SERIALIZATION_INVALID"
+  | "MIGRATION_UNSUPPORTED"
   | "EDITOR_CLOSED";
 
 export class MilestoneDomainError extends Error {

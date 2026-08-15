@@ -134,17 +134,18 @@ function evaluateArtifactRequirement(requirement: ArtifactRequirement, links: re
       reasons.push({ code: "artifact_submission_missing", subjectId: requirement.id, message: `Linked artifact ${link.artifactId} is absent` });
       continue;
     }
-    const submissions = [...context.submissions.values()].filter((submission) => submission.artifactId === artifact.id && (link.artifactVersionId === undefined || submission.artifactVersionId === link.artifactVersionId));
+    const intendedVersionId = link.artifactVersionId ?? artifact.currentVersionId;
+    if (intendedVersionId !== undefined && context.versions.get(intendedVersionId)?.artifactId !== artifact.id) {
+      reasons.push({ code: "artifact_version_missing", subjectId: requirement.id, message: `Artifact version ${intendedVersionId} is absent or belongs to another artifact` });
+      continue;
+    }
+    const submissions = [...context.submissions.values()].filter((submission) => submission.artifactId === artifact.id && (intendedVersionId === undefined || submission.artifactVersionId === intendedVersionId));
     const submission = latest(submissions, (item) => item.submittedAt, (item) => item.id);
     if (submission === undefined) {
       reasons.push({ code: "artifact_submission_missing", subjectId: requirement.id, message: `No submission exists for artifact ${artifact.id}` });
       continue;
     }
-    const versionHint = link.artifactVersionId ?? submission.artifactVersionId ?? artifact.currentVersionId;
-    if (versionHint !== undefined && context.versions.get(versionHint)?.artifactId !== artifact.id) {
-      reasons.push({ code: "artifact_version_missing", subjectId: requirement.id, message: `Artifact version ${versionHint} is absent or belongs to another artifact` });
-      continue;
-    }
+    const versionHint = intendedVersionId ?? submission.artifactVersionId;
     const verifications = [...context.verifications.values()].filter((verification) => verification.artifactId === artifact.id && (verification.submissionId === undefined || verification.submissionId === submission.id) && (versionHint === undefined || verification.artifactVersionId === versionHint));
     const verification = latest(verifications, (item) => item.verifiedAt ?? item.createdAt, (item) => item.id);
     if (verification === undefined) {
@@ -221,7 +222,7 @@ export function evaluateCompletion(milestone: Milestone, profile: MilestoneProfi
   const reasons: EvaluationReason[] = [];
   if (!profile.completion.enabled) reasons.push({ code: "profile_feature_disabled", subjectId: milestone.id, message: "Completion is disabled by the profile" });
   const currentAcceptance = milestone.currentAcceptanceId === undefined ? undefined : milestone.acceptanceRecords.find((record) => record.id === milestone.currentAcceptanceId);
-  if (currentAcceptance === undefined || currentAcceptance.milestoneRevisionId !== milestone.currentRevisionId) reasons.push({ code: "missing_criterion", subjectId: milestone.id, message: "A current acceptance for the current revision is required" });
+  if (currentAcceptance === undefined || currentAcceptance.milestoneRevisionId !== milestone.currentRevisionId) reasons.push({ code: "missing_acceptance", subjectId: milestone.id, message: "A current acceptance for the current revision is required" });
   return { completable: reasons.length === 0, reasons };
 }
 

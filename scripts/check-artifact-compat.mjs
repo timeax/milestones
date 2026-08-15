@@ -10,4 +10,14 @@ const artifactPackage = JSON.parse(await readFile(packageFile, "utf8"));
 if (artifactPackage.version !== "0.1.0") throw new Error(`Expected local @elqora/artifacts 0.1.0, got ${artifactPackage.version}`);
 if (ARTIFACT_PROTOCOL_VERSION !== "1.0") throw new Error(`Expected Artifact Protocol 1.0, got ${ARTIFACT_PROTOCOL_VERSION}`);
 if (ARTIFACT_PACKAGE_COMPATIBILITY !== ">=0.1.0 <0.2.0" || ARTIFACT_PROTOCOL_COMPATIBILITY !== ">=1.0 <2.0") throw new Error("Declared Artifact compatibility range changed unexpectedly");
-console.log(`artifact compatibility verified (package ${artifactPackage.version}, protocol ${ARTIFACT_PROTOCOL_VERSION})`);
+let localStatus = "local source not present";
+try {
+  const localPackage = JSON.parse(await readFile(new URL("../../elqora/artifacts/packages/typescript/package.json", import.meta.url), "utf8"));
+  if (localPackage.version !== artifactPackage.version) throw new Error(`Local Artifact package ${localPackage.version} differs from installed ${artifactPackage.version}`);
+  const localSource = await readFile(new URL("../../elqora/artifacts/packages/typescript/src/index.ts", import.meta.url), "utf8");
+  if (!localSource.includes(`ARTIFACT_PROTOCOL_VERSION = "${ARTIFACT_PROTOCOL_VERSION}"`)) throw new Error("Local Artifact Protocol source version differs from installed runtime");
+  localStatus = `local source ${localPackage.version}`;
+} catch (error) {
+  if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+}
+console.log(`artifact compatibility verified (npm ${artifactPackage.version}, protocol ${ARTIFACT_PROTOCOL_VERSION}, ${localStatus})`);

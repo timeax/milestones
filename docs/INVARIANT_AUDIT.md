@@ -27,7 +27,7 @@ the primary enforcement point and test area.
 | 20 | artifact evaluator requires explicit context | artifacts |
 | 21 | progress and lifecycle state are separate services | lifecycle |
 | 22 | profile ref and evaluation policy are revision-snapshotted | lifecycle |
-| 23 | actors are attribution only; no authorization logic exists | boundary tests |
+| 23 | actors remain attribution only; optional authorization invokes a host-owned policy callback without SDK roles, permissions, or identity interpretation | authorization, boundary tests |
 | 24 | no host planning/task/issue/discussion types | export audit |
 | 25 | editors contain no persistence/transport/provider calls | boundary tests, source audit |
 | 26 | lifecycle booleans are derived projections | lifecycle |

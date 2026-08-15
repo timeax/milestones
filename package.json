@@ -4,12 +4,49 @@
   "description": "Storage-neutral milestone lifecycle and evaluation domain engine.",
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=20" },
-  "files": ["dist", "README.md", "OVERVIEW.md", "docs", "LICENSE"],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.6.4",
+  "files": [
+    "dist",
+    "README.md",
+    "OVERVIEW.md",
+    "docs",
+    "LICENSE"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./model": {
+      "types": "./dist/public/model.d.ts",
+      "import": "./dist/public/model.js"
+    },
+    "./evaluation": {
+      "types": "./dist/public/evaluation.d.ts",
+      "import": "./dist/public/evaluation.js"
+    },
+    "./graph": {
+      "types": "./dist/public/graph.d.ts",
+      "import": "./dist/public/graph.js"
+    },
+    "./serialization": {
+      "types": "./dist/public/serialization.d.ts",
+      "import": "./dist/public/serialization.js"
+    },
+    "./validation": {
+      "types": "./dist/public/validation.d.ts",
+      "import": "./dist/public/validation.js"
+    },
+    "./testing": {
+      "types": "./dist/public/testing.d.ts",
+      "import": "./dist/public/testing.js"
+    },
+    "./migrations": {
+      "types": "./dist/public/migrations.d.ts",
+      "import": "./dist/public/migrations.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -20,13 +57,17 @@
     "test": "vitest run --coverage",
     "lint": "eslint src test --max-warnings=0",
     "check:exports": "node scripts/check-exports.mjs",
-    "check:artifact": "node scripts/check-artifact-compat.mjs"
+    "check:artifact": "node scripts/check-artifact-compat.mjs",
+    "check:package": "node scripts/package-smoke.mjs",
+    "check:bun": "bun x tsc -p tsconfig.json --noEmit && bun run build && bun x vitest run && bun scripts/bun-smoke.mjs",
+    "check:examples": "npm run build && tsc -p tsconfig.examples.json",
+    "check:node": "npm run typecheck && npm run build && npm run lint && npm test && npm run check:examples && npm run check:exports && npm run check:artifact && npm run check:package"
   },
   "peerDependencies": {
     "@elqora/artifacts": ">=0.1.0 <0.2.0"
   },
   "devDependencies": {
-    "@elqora/artifacts": "file:../elqora/artifacts/packages/typescript",
+    "@elqora/artifacts": "^0.1.0",
     "@eslint/js": "^9.33.0",
     "@types/node": "^22.17.2",
     "@vitest/coverage-v8": "^3.2.4",
@@ -35,5 +76,20 @@
     "typescript-eslint": "^8.39.1",
     "vitest": "^3.2.4"
   },
-  "license": "AGPL-3.0-only"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timeax/milestones.git"
+  },
+  "homepage": "https://github.com/timeax/milestones#readme",
+  "bugs": {
+    "url": "https://github.com/timeax/milestones/issues"
+  },
+  "keywords": [
+    "milestones",
+    "domain-engine",
+    "project-management",
+    "artifacts",
+    "typescript"
+  ],
+  "license": "Unlicense"
 }

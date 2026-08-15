@@ -12,8 +12,8 @@ import {
   serializeGraph,
   serializeMilestone,
   validateMilestone,
-  validateProfile,
 } from "../src/index.js";
+import { validateProfile } from "../src/public/validation.js";
 import { actor, create, profile } from "./helpers.js";
 
 describe("serialization, validation, and editor boundaries", () => {

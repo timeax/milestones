@@ -34,5 +34,16 @@ describe("cross-domain lifecycle", () => {
     expect(snapshot.approvals[0]).toMatchObject({ effectiveApprovalCount: 1, waived: false, satisfied: true });
     expect(snapshot.artifacts[0]).toMatchObject({ artifactVersionId: "v1", submissionId: "submission", verificationId: "verification" });
     expect(result.currentCompletionId).toBeDefined();
+
+    const reopen = new MilestoneEditor(result, p, downstreamHarness);
+    reopen.reopen({ effect: "invalidate_acceptance_and_completion", reason: "Evidence invalidated", actor, cause: { type: "artifact_invalidation", ref: verification.id } });
+    const reopened = reopen.commit().milestone;
+    const reclose = new MilestoneEditor(reopened, p, { ...downstreamHarness, graph, artifacts });
+    reclose.accept(actor); reclose.complete(actor, "closed again");
+    const final = reclose.commit().milestone;
+    expect(final.acceptanceRecords).toHaveLength(2);
+    expect(final.completionRecords).toHaveLength(2);
+    expect(final.currentAcceptanceId).toBe(final.acceptanceRecords[1]!.id);
+    expect(final.currentCompletionId).toBe(final.completionRecords[1]!.id);
   });
 });

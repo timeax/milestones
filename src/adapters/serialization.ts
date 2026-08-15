@@ -24,6 +24,7 @@ import type {
   MilestoneWire,
 } from "../model/domain.js";
 import { MilestoneDomainError, invariant } from "../model/errors.js";
+import { MILESTONE_PROTOCOL_VERSION } from "../model/protocol.js";
 import { assertValidMilestone } from "../services/validation.js";
 
 export interface MilestoneGraphWire {
@@ -50,10 +51,12 @@ export interface MilestoneArtifactContextWire {
 }
 
 export function serializeMilestone(milestone: Milestone): MilestoneWire {
-  assertSerializable(milestone); return { schemaVersion: "1.0", ...structuredClone(milestone) };
+  assertSerializable(milestone); return { schemaVersion: MILESTONE_PROTOCOL_VERSION, ...structuredClone(milestone) };
 }
 export function deserializeMilestone(value: unknown): Milestone {
-  invariant(isRecord(value) && value["schemaVersion"] === "1.0", "SERIALIZATION_INVALID", "Unsupported or missing milestone schemaVersion");
+  invariant(isRecord(value) && value["schemaVersion"] === MILESTONE_PROTOCOL_VERSION, "SERIALIZATION_INVALID", "Unsupported or missing milestone schemaVersion");
+  const allowed = new Set(["schemaVersion", "id", "profile", "currentRevisionId", "revisions", "definition", "criteria", "deliverables", "dependencies", "challenges", "reviews", "approvalPolicy", "approvalRecords", "acceptanceRecords", "currentAcceptanceId", "completionRecords", "currentCompletionId", "sequence", "createdAt", "updatedAt"]);
+  invariant(Object.keys(value).every((key) => allowed.has(key)), "SERIALIZATION_INVALID", "Milestone wire record contains unknown top-level fields");
   const { schemaVersion: _schemaVersion, ...milestone } = value;
   invariant(
     typeof milestone["id"] === "string" && typeof milestone["currentRevisionId"] === "string" && typeof milestone["sequence"] === "number"
@@ -64,7 +67,15 @@ export function deserializeMilestone(value: unknown): Milestone {
   );
   assertValidMilestone(milestone as unknown as Milestone); return structuredClone(milestone) as unknown as Milestone;
 }
-export function serializeEvents(events: readonly MilestoneEvent[]): string { assertSerializable(events); return JSON.stringify(events); }
+export function serializeMilestoneJson(milestone: Milestone): string {
+  return stableJson(serializeMilestone(milestone));
+}
+export function deserializeMilestoneJson(json: string): Milestone {
+  let value: unknown;
+  try { value = JSON.parse(json) as unknown; } catch (error) { throw new MilestoneDomainError("SERIALIZATION_INVALID", "Invalid milestone JSON", { cause: String(error) }); }
+  return deserializeMilestone(value);
+}
+export function serializeEvents(events: readonly MilestoneEvent[]): string { assertSerializable(events); return stableJson(events); }
 export function deserializeEvents(json: string): readonly MilestoneEvent[] {
   let parsed: unknown; try { parsed = JSON.parse(json) as unknown; } catch (error) { throw new MilestoneDomainError("SERIALIZATION_INVALID", "Invalid event JSON", { cause: String(error) }); }
   invariant(Array.isArray(parsed) && parsed.every((event) => isRecord(event) && typeof event["type"] === "string" && typeof event["sequence"] === "number" && isRecord(event["payload"])), "SERIALIZATION_INVALID", "Invalid milestone event array");
@@ -115,4 +126,13 @@ function assertSerializable(value: unknown): void {
     if (error instanceof MilestoneDomainError) throw error;
     throw new MilestoneDomainError("SERIALIZATION_INVALID", "Value is not JSON serializable", { cause: String(error) });
   }
+}
+
+function stableJson(value: unknown): string {
+  const normalize = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(normalize);
+    if (isRecord(item)) return Object.fromEntries(Object.keys(item).sort().map((key) => [key, normalize(item[key])]));
+    return item;
+  };
+  return JSON.stringify(normalize(value));
 }

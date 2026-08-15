@@ -43,6 +43,6 @@ describe("Artifact Protocol integration", () => {
     expect(evaluateArtifacts({ type: "criterion", id: "criterion", requirementIds: ["req-1"] }, rejected).reasons.some((reason) => reason.code === "artifact_verification_failed")).toBe(true);
     const badLink = { ...rejected.links[0]!, artifactVersionId: "missing-version" } as ArtifactLink;
     const inconsistent = { ...rejected, links: [badLink as MilestoneArtifactLink] };
-    expect(evaluateArtifacts({ type: "criterion", id: "criterion", requirementIds: ["req-1"] }, inconsistent).reasons.some((reason) => reason.code === "artifact_submission_missing")).toBe(true);
+    expect(evaluateArtifacts({ type: "criterion", id: "criterion", requirementIds: ["req-1"] }, inconsistent).reasons.some((reason) => reason.code === "artifact_version_missing")).toBe(true);
   });
 });
