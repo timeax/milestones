@@ -13,6 +13,7 @@ import type {
 } from "../model/domain.js";
 import type { ValidationIssue } from "../model/errors.js";
 import { MilestoneDomainError } from "../model/errors.js";
+import { graphDependencyIdentityKey } from "./dependency-identity.js";
 
 export function graphNodeFromMilestone(milestone: Milestone): MilestoneGraphNode {
   const gates: MilestoneGateState = {
@@ -53,7 +54,7 @@ export function validateGraph(graph: MilestoneGraphSnapshot): readonly Validatio
     } else if (dependency.gate.type === "deliverable" && !upstream.gates.deliverables.has(dependency.gate.deliverableRequirementId)) {
       issues.push({ code: "missing_gate_target", path: `dependencies.${dependency.id}.gate.deliverableRequirementId`, message: `Missing upstream deliverable ${dependency.gate.deliverableRequirementId}` });
     }
-    const key = `${dependency.milestoneId}|${dependency.dependsOnMilestoneId}|${JSON.stringify(dependency.gate)}`;
+    const key = graphDependencyIdentityKey(dependency);
     if (keys.has(key)) issues.push({ code: "duplicate_dependency", path: `dependencies.${dependency.id}`, message: "Duplicate dependency gate" });
     keys.add(key);
   }

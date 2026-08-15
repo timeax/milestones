@@ -2,6 +2,7 @@ import type { ApprovalRecord, ApprovalRecordId, Milestone, MilestoneAcceptance, 
 import type { ValidationIssue } from "../../model/errors.js";
 import { addIssue, duplicates, nonEmpty, validateApprovalStages, validateCriteria, validateDeliverables, validateUniqueIds } from "./common.js";
 import { validateRevisions } from "./revisions.js";
+import { dependencyIdentityKey } from "../dependency-identity.js";
 
 function validateAcceptanceSnapshot(issues: ValidationIssue[], acceptance: MilestoneAcceptance, revision: MilestoneRevision, milestone: Milestone): void {
   const path = `acceptanceRecords.${acceptance.id}.snapshot`;
@@ -44,7 +45,7 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
     if (!["accepted", "completed", "criterion", "deliverable"].includes(dependency.gate.type)) addIssue(issues, "invalid_dependency_gate", `dependencies.${dependency.id}.gate.type`, "Dependency gate type is invalid");
     if (dependency.milestoneId !== milestone.id) addIssue(issues, "dependency_milestone_mismatch", `dependencies.${dependency.id}.milestoneId`, "Dependency must belong to this milestone");
     if (dependency.dependsOnMilestoneId === milestone.id) addIssue(issues, "self_dependency", `dependencies.${dependency.id}`, "A milestone cannot depend on itself");
-    const key = `${dependency.dependsOnMilestoneId}|${JSON.stringify(dependency.gate)}`;
+    const key = dependencyIdentityKey(dependency.dependsOnMilestoneId, dependency.gate);
     if (dependencyKeys.has(key)) addIssue(issues, "duplicate_dependency", `dependencies.${dependency.id}`, "Duplicate dependency gate");
     dependencyKeys.add(key);
   }

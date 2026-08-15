@@ -1,5 +1,5 @@
 import { invariant } from "../model/errors.js";
-import { clone, ensureOpen, requiredText } from "./internal/helpers.js";
+import { clone, ensureOpen, equalDomainValue, requiredText } from "./internal/helpers.js";
 import type {
   EditorHistorySnapshot,
   EditorHistoryState,
@@ -92,7 +92,11 @@ export class MilestoneEditorHistoryController implements MilestoneEditorHistory 
   }
 }
 
-export function historyAware<T extends object>(session: EditorSession, editor: T): T {
+/**
+ * Adds session history semantics to a command-only sub-editor. Query methods
+ * belong on a direct reader/facade and must not be added to this command proxy.
+ */
+export function historyAwareCommands<T extends object>(session: EditorSession, editor: T): T {
   return new Proxy(editor, {
     get(target, property, receiver) {
       const value = Reflect.get(target, property, receiver) as unknown;
@@ -193,7 +197,7 @@ function restoreHistorySnapshot(
 }
 
 function sameSnapshot(left: EditorHistorySnapshot, right: EditorHistorySnapshot): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  return equalDomainValue(left, right);
 }
 
 function assertOutsideTransaction(session: EditorSession): void {

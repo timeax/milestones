@@ -270,6 +270,60 @@ describe("editor session history", () => {
     expect(editor.commit().milestone.definition.title).toBe("Keep");
   });
 
+  it("treats reordered nested domain values as unchanged and keeps queries out of history", () => {
+    const harness = create({
+      definition: {
+        title: "M1",
+        metadata: {
+          first: 1,
+          nested: { alpha: true, beta: false },
+        },
+      },
+    }, "history-semantic-equality");
+    const editor = new MilestoneEditor(harness.milestone, harness.profile, harness);
+
+    editor.definition.update({
+      metadata: {
+        nested: { beta: false, alpha: true },
+        first: 1,
+      },
+      title: "M1",
+    }, { reason: "Property order only" });
+    editor.evaluateAcceptance();
+    editor.evaluateCompletion();
+
+    expect(editor.history).toMatchObject({
+      length: 1,
+      index: 0,
+      canUndo: false,
+      canRedo: false,
+    });
+    const result = editor.commit();
+    expect(result.changes).toEqual([]);
+    expect(result.events).toEqual([]);
+    expect(result.revision).toBeUndefined();
+  });
+
+  it("uses a zero limit to disable undo retention without discarding current edits", () => {
+    const harness = create({}, "history-disabled");
+    const editor = new MilestoneEditor(harness.milestone, harness.profile, {
+      ...harness,
+      historyLimit: 0,
+    });
+
+    editor.definition.update({ title: "Still committed" }, { reason: "Edit" });
+
+    expect(editor.history).toMatchObject({
+      length: 1,
+      index: 0,
+      canUndo: false,
+      canRedo: false,
+    });
+    expect(editor.history.undo()).toBe(false);
+    expect(editor.history.redo()).toBe(false);
+    expect(editor.commit().milestone.definition.title).toBe("Still committed");
+  });
+
   it("validates limits and rejects history mutations after commit", () => {
     const harness = create({}, "history-closed");
     expect(() => new MilestoneEditor(harness.milestone, harness.profile, {

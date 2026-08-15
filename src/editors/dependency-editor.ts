@@ -6,6 +6,7 @@ import type {
   MilestoneDependencyGate,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
+import { dependencyIdentityKey } from "../services/dependency-identity.js";
 import { emit } from "./internal/events.js";
 import { clone, ensureOpen, equalDomainValue, feature } from "./internal/helpers.js";
 import { beginMaterialRevision } from "./internal/revision.js";
@@ -38,8 +39,8 @@ export class DependencyEditor {
     );
     invariant(
       !this.session.draft.dependencies.some(
-        (item) => item.dependsOnMilestoneId === dependsOnMilestoneId
-          && JSON.stringify(item.gate) === JSON.stringify(gate),
+        (item) => dependencyIdentityKey(item.dependsOnMilestoneId, item.gate)
+          === dependencyIdentityKey(dependsOnMilestoneId, gate),
       ),
       "DUPLICATE_DEPENDENCY",
       "Duplicate dependency gate",
@@ -93,8 +94,8 @@ export class DependencyEditor {
     invariant(
       !this.session.draft.dependencies.some(
         (item) => item.id !== id
-          && item.dependsOnMilestoneId === updated.dependsOnMilestoneId
-          && JSON.stringify(item.gate) === JSON.stringify(updated.gate),
+          && dependencyIdentityKey(item.dependsOnMilestoneId, item.gate)
+            === dependencyIdentityKey(updated.dependsOnMilestoneId, updated.gate),
       ),
       "DUPLICATE_DEPENDENCY",
       "Duplicate dependency gate",

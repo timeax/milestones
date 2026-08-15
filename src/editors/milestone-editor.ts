@@ -33,7 +33,7 @@ import { DependencyEditor, createDependencyEditor } from "./dependency-editor.js
 import type { MilestoneEditorOptions } from "./editor-contracts.js";
 import {
   createHistoryState,
-  historyAware,
+  historyAwareCommands,
   initializeHistory,
   MilestoneEditorHistoryController,
   runMutation,
@@ -97,14 +97,14 @@ export class MilestoneEditor {
     };
     initializeHistory(this.session);
     this.history = new MilestoneEditorHistoryController(this.session);
-    this.definition = historyAware(this.session, createDefinitionEditor(this.session));
-    this.criteria = historyAware(this.session, createCriteriaEditor(this.session));
-    this.deliverables = historyAware(this.session, createDeliverableEditor(this.session));
-    this.dependencies = historyAware(this.session, createDependencyEditor(this.session));
-    this.challenges = historyAware(this.session, createChallengeEditor(this.session));
-    this.reviews = historyAware(this.session, createReviewEditor(this.session));
-    this.approvals = historyAware(this.session, createApprovalEditor(this.session));
-    this.revisions = historyAware(this.session, createRevisionEditor(this.session));
+    this.definition = historyAwareCommands(this.session, createDefinitionEditor(this.session));
+    this.criteria = historyAwareCommands(this.session, createCriteriaEditor(this.session));
+    this.deliverables = historyAwareCommands(this.session, createDeliverableEditor(this.session));
+    this.dependencies = historyAwareCommands(this.session, createDependencyEditor(this.session));
+    this.challenges = historyAwareCommands(this.session, createChallengeEditor(this.session));
+    this.reviews = historyAwareCommands(this.session, createReviewEditor(this.session));
+    this.approvals = historyAwareCommands(this.session, createApprovalEditor(this.session));
+    this.revisions = historyAwareCommands(this.session, createRevisionEditor(this.session));
   }
 
   public static create(

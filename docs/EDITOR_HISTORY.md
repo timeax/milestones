@@ -26,6 +26,11 @@ editor.history.clear();
 History is linear. A mutation made after undo discards the abandoned redo
 branch. The initial editor state is always the first history point.
 
+Focused sub-editors are command-only facades. Their command methods participate
+in the shared history through an internal proxy; unchanged commands create no
+checkpoint. Future read/query APIs must be exposed directly on the editor or
+through a separate reader rather than added to these command facades.
+
 The default retained undo depth is 100 and the maximum is 1,000. The configured
 `historyLimit` counts undo steps; the current point is retained in addition to
 that limit. A limit of zero disables undo retention while preserving the active
