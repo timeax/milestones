@@ -1,0 +1,39 @@
+{
+  "name": "@elqora/milestones",
+  "version": "0.1.0",
+  "description": "Storage-neutral milestone lifecycle and evaluation domain engine.",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=20" },
+  "files": ["dist", "README.md", "OVERVIEW.md", "docs", "LICENSE"],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --coverage",
+    "lint": "eslint src test --max-warnings=0",
+    "check:exports": "node scripts/check-exports.mjs",
+    "check:artifact": "node scripts/check-artifact-compat.mjs"
+  },
+  "peerDependencies": {
+    "@elqora/artifacts": ">=0.1.0 <0.2.0"
+  },
+  "devDependencies": {
+    "@elqora/artifacts": "file:../elqora/artifacts/packages/typescript",
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^22.17.2",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.33.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.1",
+    "vitest": "^3.2.4"
+  },
+  "license": "AGPL-3.0-only"
+}
