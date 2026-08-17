@@ -1,16 +1,16 @@
 const expectedRoot = [
   "ARTIFACT_PACKAGE_COMPATIBILITY", "ARTIFACT_PROTOCOL_COMPATIBILITY", "ARTIFACT_PROTOCOL_VERSION",
-  "ApprovalEditor", "ChallengeEditor", "CriteriaEditor", "DEFAULT_EDITOR_HISTORY_LIMIT",
+  "ApprovalEditor", "ChallengeEditor", "CriteriaEditor", "DEFAULT_EDITOR_HISTORY_LIMIT", "EvidenceEditor",
   "DefinitionEditor", "DeliverableEditor", "DependencyEditor", "FixedMilestoneClock",
   "MAX_EDITOR_HISTORY_LIMIT", "MILESTONE_PROTOCOL_VERSION", "MilestoneDomainError", "MilestoneEditor", "MilestoneValidationError", "migrateAndDeserializeMilestone", "migrateMilestoneWire",
   "ReviewEditor", "RevisionEditor", "SequenceMilestoneIdGenerator", "SystemMilestoneClock",
-  "asAcceptanceId", "asApprovalRecordId", "asApprovalStageId", "asChallengeId", "asCompletionId",
+  "asAcceptanceId", "asApprovalRecordId", "asApprovalStageId", "asChallengeEvidenceId", "asChallengeId", "asCompletionId",
   "affectedMilestoneIds", "asCriterionId", "asDeliverableRequirementId", "asDependencyId", "asMilestoneEventId", "asMilestoneId",
   "asMilestoneProfileId", "asMilestoneRevisionId", "asReviewId", "assertValidGraph", "blockedMilestoneIds",
   "assertValidMilestone", "calculateProgress", "createGraphSnapshot", "defaultEvaluationPolicy",
   "deriveMilestoneState", "deserializeArtifactContext", "deserializeEvents", "deserializeGraph", "deserializeMilestoneJson", "evaluateGraph",
   "deserializeMilestone", "detectCycles", "downstreamImpact", "evaluateAcceptance", "evaluateArtifacts",
-  "evaluateCompletion", "evaluateDependency", "findUnlockedMilestoneIds", "serializeArtifactContext",
+  "evaluateCompletion", "evaluateDependency", "findUnlockedMilestoneIds", "resolveChallengeEvidenceSources", "serializeArtifactContext",
   "readyMilestoneIds", "serializeEvents", "serializeGraph", "serializeMilestone", "serializeMilestoneJson", "validateGraph", "validateMilestone",
 ].sort();
 
@@ -19,7 +19,7 @@ const actualRoot = Object.keys(pkg).sort();
 if (JSON.stringify(actualRoot) !== JSON.stringify(expectedRoot)) {
   throw new Error(`Root export snapshot changed:\n${actualRoot.join("\n")}`);
 }
-if (pkg.ARTIFACT_PROTOCOL_COMPATIBILITY !== ">=1.0 <2.0") throw new Error("Artifact protocol compatibility mismatch");
+if (pkg.ARTIFACT_PROTOCOL_COMPATIBILITY !== ">=1.1 <2.0") throw new Error("Artifact protocol compatibility mismatch");
 
 const subpaths = {
   model: "MilestoneDomainError",

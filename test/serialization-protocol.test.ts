@@ -7,6 +7,7 @@ import {
   deriveMilestoneState,
   deserializeMilestone,
   deserializeMilestoneJson,
+  migrateAndDeserializeMilestone,
   serializeMilestone,
   serializeMilestoneJson,
 } from "../src/index.js";
@@ -19,25 +20,25 @@ async function fixture(name: typeof fixtureNames[number]): Promise<string> {
 }
 
 describe("milestone serialization protocol", () => {
-  it("declares protocol v1 independently", () => {
-    expect(MILESTONE_PROTOCOL_VERSION).toBe("1.0");
+  it("declares protocol v1.1 independently", () => {
+    expect(MILESTONE_PROTOCOL_VERSION).toBe("1.1");
   });
 
   it.each(fixtureNames)("hydrates and canonically round-trips the %s v1 fixture", async (name) => {
     const json = await fixture(name);
-    const milestone = deserializeMilestoneJson(json);
+    const milestone = migrateAndDeserializeMilestone(JSON.parse(json));
     const first = serializeMilestoneJson(milestone);
     const second = serializeMilestoneJson(deserializeMilestoneJson(first));
     expect(second).toBe(first);
-    expect(JSON.parse(first)).toEqual(JSON.parse(json));
-    expect(serializeMilestone(milestone).schemaVersion).toBe("1.0");
+    expect(JSON.parse(first)).toMatchObject({ schemaVersion: "1.1" });
+    expect(serializeMilestone(milestone).schemaVersion).toBe("1.1");
   });
 
   it("retains the lifecycle meaning of compatibility fixtures", async () => {
-    expect(deriveMilestoneState(deserializeMilestoneJson(await fixture("minimal")))).toBe("open");
-    expect(deriveMilestoneState(deserializeMilestoneJson(await fixture("accepted")))).toBe("accepted");
-    expect(deriveMilestoneState(deserializeMilestoneJson(await fixture("completed")))).toBe("completed");
-    const reopened = deserializeMilestoneJson(await fixture("reopened"));
+    expect(deriveMilestoneState(migrateAndDeserializeMilestone(JSON.parse(await fixture("minimal"))))).toBe("open");
+    expect(deriveMilestoneState(migrateAndDeserializeMilestone(JSON.parse(await fixture("accepted"))))).toBe("accepted");
+    expect(deriveMilestoneState(migrateAndDeserializeMilestone(JSON.parse(await fixture("completed"))))).toBe("completed");
+    const reopened = migrateAndDeserializeMilestone(JSON.parse(await fixture("reopened")));
     expect(deriveMilestoneState(reopened)).toBe("open");
     expect(reopened.acceptanceRecords).toHaveLength(1);
     expect(reopened.completionRecords).toHaveLength(1);
@@ -54,7 +55,7 @@ describe("milestone serialization protocol", () => {
   });
 
   it("canonicalizes object-key insertion while preserving array order", async () => {
-    const milestone = deserializeMilestoneJson(await fixture("minimal"));
+    const milestone = migrateAndDeserializeMilestone(JSON.parse(await fixture("minimal")));
     const left = { ...milestone, definition: { ...milestone.definition, metadata: { z: 1, a: 2 } } };
     const right = { ...milestone, definition: { ...milestone.definition, metadata: { a: 2, z: 1 } } };
     expect(serializeMilestoneJson(left)).toBe(serializeMilestoneJson(right));

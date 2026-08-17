@@ -13,13 +13,14 @@ unknown serialized record
 → hydrate current Milestone
 ```
 
-`migrateMilestoneWire` currently accepts protocol 1.0, validates it, and returns
-a normalized current wire with no applied migrations. There is no protocol v2,
-so no synthetic transform is provided. Older or future version values fail with
+`migrateMilestoneWire` accepts legacy protocol 1.0 and applies the registered
+`1.0-to-1.1` transform, adding `evidence: []` to every challenge while preserving
+all stable IDs, revisions, ledgers, events, and lifecycle pointers. Current 1.1
+wires normalize without a migration. Older or future version values fail with
 `MIGRATION_UNSUPPORTED`; hosts must not strip/change the version and hope that
 current validation is sufficient.
 
-When v2 is specified, its `v1-to-v2` transform will be added under
+When a later protocol is specified, its transform will be added under
 `src/migrations/`, registered in order, and tested against all committed v1
 fixtures. A migration must preserve stable IDs, revisions, actors, ledger facts,
 and exact evidence unless the new normative protocol explicitly says otherwise.

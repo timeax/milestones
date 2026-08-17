@@ -3,6 +3,7 @@ import type {
   ApprovalRecordId,
   ApprovalStageId,
   ChallengeId,
+  ChallengeEvidenceId,
   ChallengeTarget,
   CriterionId,
   DeliverableRequirementId,
@@ -22,6 +23,9 @@ export type MilestoneAction =
   | "deliverable.waive"
   | "challenge.raise"
   | "challenge.resolve"
+  | "evidence.add"
+  | "evidence.supersede"
+  | "evidence.withdraw"
   | "review.complete"
   | "approval.grant"
   | "approval.reject"
@@ -37,6 +41,7 @@ export type MilestoneActionSubject =
   | { readonly type: "criterion"; readonly criterionId: CriterionId }
   | { readonly type: "deliverable_requirement"; readonly deliverableRequirementId: DeliverableRequirementId }
   | { readonly type: "challenge"; readonly challengeId: ChallengeId }
+  | { readonly type: "challenge_evidence"; readonly challengeId: ChallengeId; readonly challengeEvidenceId?: ChallengeEvidenceId }
   | { readonly type: "challenge_target"; readonly target: ChallengeTarget }
   | { readonly type: "review"; readonly reviewId: ReviewId }
   | { readonly type: "approval_stage"; readonly approvalStageId: ApprovalStageId; readonly authorityRef?: string }

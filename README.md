@@ -53,8 +53,9 @@ provider, Git, or artifact-storage operations.
 
 ## Compatibility
 
-`@elqora/milestones` 0.1.x supports `@elqora/artifacts >=0.1.0 <0.2.0`
-and Artifact Protocol `>=1.0 <2.0`.
+`@elqora/milestones` 0.1.x supports `@elqora/artifacts >=0.2.0 <0.3.0`
+and Artifact Protocol `>=1.1 <2.0`. Challenge evidence is append-only audit
+material with canonical, version-pinned Artifact Links; it is not an acceptance gate.
 
 ## License
 

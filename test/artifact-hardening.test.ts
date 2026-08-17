@@ -22,12 +22,12 @@ function contextFor(
   subject: { readonly type: MilestoneArtifactSubjectType; readonly id: string },
   role: MilestoneArtifactRole = "evidence",
 ): MilestoneArtifactContext {
-  const requirement: ArtifactRequirement = { schemaVersion: "1.0", id: "req", required: true, minimumCount: 1, allowedKinds: ["report"], allowedValueTypes: ["file"] };
-  const artifact: Artifact = { schemaVersion: "1.0", id: "artifact", kind: "report", valueType: "file", currentVersionId: "v1", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z", updatedAt: "2026-08-15T00:00:00Z" };
-  const version: ArtifactVersion = { schemaVersion: "1.0", id: "v1", artifactId: artifact.id, version: 1, source: { type: "url", url: "https://example.test/v1" }, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z" };
-  const submission: ArtifactSubmission = { schemaVersion: "1.0", id: "submission", artifactId: artifact.id, artifactVersionId: version.id, submittedBy: { type: "user", id: "author" }, submittedAt: "2026-08-15T01:00:00Z" };
-  const verification: ArtifactVerification = { schemaVersion: "1.0", id: "verification", artifactId: artifact.id, artifactVersionId: version.id, submissionId: submission.id, status: "verified", createdAt: "2026-08-15T02:00:00Z", verifiedAt: "2026-08-15T02:00:00Z", verifiedBy: { type: "user", id: "verifier" } };
-  const link: MilestoneArtifactLink = { schemaVersion: "1.0", id: "link", artifactId: artifact.id, artifactVersionId: version.id, subject, role, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T01:00:00Z", metadata: { artifactRequirementId: requirement.id } };
+  const requirement: ArtifactRequirement = { schemaVersion: "1.1", id: "req", required: true, minimumCount: 1, allowedKinds: ["report"], allowedValueTypes: ["file"] };
+  const artifact: Artifact = { schemaVersion: "1.1", id: "artifact", kind: "report", valueType: "file", currentVersionId: "v1", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z", updatedAt: "2026-08-15T00:00:00Z" };
+  const version: ArtifactVersion = { schemaVersion: "1.1", id: "v1", artifactId: artifact.id, version: 1, source: { type: "url", url: "https://example.test/v1" }, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z" };
+  const submission: ArtifactSubmission = { schemaVersion: "1.1", id: "submission", artifactId: artifact.id, artifactVersionId: version.id, submittedBy: { type: "user", id: "author" }, submittedAt: "2026-08-15T01:00:00Z" };
+  const verification: ArtifactVerification = { schemaVersion: "1.1", id: "verification", artifactId: artifact.id, artifactVersionId: version.id, submissionId: submission.id, status: "verified", createdAt: "2026-08-15T02:00:00Z", verifiedAt: "2026-08-15T02:00:00Z", verifiedBy: { type: "user", id: "verifier" } };
+  const link: MilestoneArtifactLink = { schemaVersion: "1.1", id: "link", artifactId: artifact.id, artifactVersionId: version.id, subject, role, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T01:00:00Z", metadata: { artifactRequirementId: requirement.id } };
   return {
     requirements: new Map([[requirement.id, requirement]]),
     artifacts: new Map([[artifact.id, artifact]]),

@@ -64,10 +64,10 @@
     "check:node": "npm run typecheck && npm run build && npm run lint && npm test && npm run check:examples && npm run check:exports && npm run check:artifact && npm run check:package"
   },
   "peerDependencies": {
-    "@elqora/artifacts": ">=0.1.0 <0.2.0"
+    "@elqora/artifacts": "^0.2.0"
   },
   "devDependencies": {
-    "@elqora/artifacts": "^0.1.0",
+    "@elqora/artifacts": "^0.2.0",
     "@eslint/js": "^9.33.0",
     "@types/node": "^22.17.2",
     "@vitest/coverage-v8": "^3.2.4",

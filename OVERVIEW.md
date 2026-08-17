@@ -205,6 +205,7 @@ type CriterionId = Brand<string, "CriterionId">;
 type DeliverableRequirementId = Brand<string, "DeliverableRequirementId">;
 type DependencyId = Brand<string, "DependencyId">;
 type ChallengeId = Brand<string, "ChallengeId">;
+type ChallengeEvidenceId = Brand<string, "ChallengeEvidenceId">;
 type ReviewId = Brand<string, "ReviewId">;
 type ApprovalStageId = Brand<string, "ApprovalStageId">;
 type ApprovalRecordId = Brand<string, "ApprovalRecordId">;
@@ -236,6 +237,7 @@ interface MilestoneIdGenerator {
   deliverableRequirement(): DeliverableRequirementId;
   dependency(): DependencyId;
   challenge(): ChallengeId;
+  challengeEvidence(): ChallengeEvidenceId;
   review(): ReviewId;
   approvalStage(): ApprovalStageId;
   approvalRecord(): ApprovalRecordId;
@@ -597,6 +599,24 @@ interface MilestoneChallenge {
   raisedBy?: ActorRef;
   createdAt: string;
   resolution?: ChallengeResolution;
+  evidence: readonly ChallengeEvidence[];
+}
+
+interface ChallengeEvidence {
+  id: ChallengeEvidenceId;
+  milestoneId: MilestoneId;
+  challengeId: ChallengeId;
+  milestoneRevisionId: MilestoneRevisionId;
+  kind: "supporting" | "response";
+  title: string;
+  description: string;
+  state: "active" | "superseded" | "withdrawn";
+  supersedesEvidenceId?: ChallengeEvidenceId;
+  createdBy?: ActorRef;
+  createdAt: string;
+  withdrawnBy?: ActorRef;
+  withdrawnAt?: string;
+  withdrawalReason?: string;
 }
 
 interface ChallengeResolution {
@@ -613,7 +633,9 @@ interface ChallengeResolution {
 
 Targets MAY include a milestone, criterion, deliverable requirement, review, or artifact/evidence reference.
 
-Challenge evidence SHOULD be represented through Artifact SDK links rather than milestone-specific artifact ID arrays.
+Challenge evidence is first-class, append-only audit material. Its title and description are mandatory. Supersession creates a new record and marks its predecessor `superseded`; withdrawal marks an active record `withdrawn`; neither deletes evidence. Evidence MUST NOT create a milestone revision, invalidate lifecycle pointers, or block acceptance.
+
+Evidence sources MUST be canonical Artifact SDK links whose subject is `{ type: "challenge_evidence", id: evidenceId }`. Supporting evidence uses role `challenge_evidence`; response evidence uses role `response_evidence`. Once a source link exists it MUST pin an exact Artifact Version. Artifact records, raw artifact IDs, and source-link arrays MUST NOT be embedded in evidence.
 
 An unresolved blocking challenge MAY block a new acceptance under the snapshotted policy.
 
@@ -771,6 +793,8 @@ interface MilestoneAcceptanceSnapshot {
   artifacts: readonly ArtifactEvaluationSnapshot[];
 }
 ```
+
+Each challenge snapshot includes immutable evidence metadata, evidence state, source-resolution status, and the resolved Artifact Link, artifact, and exact artifact-version IDs. Pending or invalid evidence sources are preserved as audit context and do not become acceptance reasons.
 
 This snapshot is the normative historical boundary for artifact evidence used in acceptance.
 
@@ -1101,6 +1125,8 @@ These external records remain outside the milestone package.
 30. Historical lifecycle records are never deleted merely because the milestone is reopened.
 31. Artifact storage and artifact identity remain separate concerns.
 32. The supported Artifact Protocol compatibility range is explicit and versioned.
+33. Challenge evidence is append-only audit material and only an explicit challenge resolution outcome may reopen lifecycle state.
+34. Challenge evidence sources are canonical version-pinned Artifact Links, not embedded artifact records or source arrays.
 
 ---
 

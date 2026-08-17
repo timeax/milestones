@@ -3,6 +3,7 @@ import type {
   ApprovalRecordId,
   ApprovalStageId,
   ChallengeId,
+  ChallengeEvidenceId,
   CompletionId,
   CriterionId,
   DeliverableRequirementId,
@@ -36,6 +37,7 @@ export class SequenceMilestoneIdGenerator implements MilestoneIdGenerator {
   public deliverableRequirement(): DeliverableRequirementId { return this.next("deliverable") as DeliverableRequirementId; }
   public dependency(): DependencyId { return this.next("dependency") as DependencyId; }
   public challenge(): ChallengeId { return this.next("challenge") as ChallengeId; }
+  public challengeEvidence(): ChallengeEvidenceId { return this.next("challenge_evidence") as ChallengeEvidenceId; }
   public review(): ReviewId { return this.next("review") as ReviewId; }
   public approvalStage(): ApprovalStageId { return this.next("approval_stage") as ApprovalStageId; }
   public approvalRecord(): ApprovalRecordId { return this.next("approval_record") as ApprovalRecordId; }
@@ -51,6 +53,7 @@ export const asCriterionId = (value: string): CriterionId => value as CriterionI
 export const asDeliverableRequirementId = (value: string): DeliverableRequirementId => value as DeliverableRequirementId;
 export const asDependencyId = (value: string): DependencyId => value as DependencyId;
 export const asChallengeId = (value: string): ChallengeId => value as ChallengeId;
+export const asChallengeEvidenceId = (value: string): ChallengeEvidenceId => value as ChallengeEvidenceId;
 export const asReviewId = (value: string): ReviewId => value as ReviewId;
 export const asApprovalStageId = (value: string): ApprovalStageId => value as ApprovalStageId;
 export const asApprovalRecordId = (value: string): ApprovalRecordId => value as ApprovalRecordId;

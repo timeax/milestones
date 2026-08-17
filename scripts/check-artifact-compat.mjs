@@ -7,9 +7,9 @@ import {
 
 const packageFile = new URL("../node_modules/@elqora/artifacts/package.json", import.meta.url);
 const artifactPackage = JSON.parse(await readFile(packageFile, "utf8"));
-if (artifactPackage.version !== "0.1.0") throw new Error(`Expected local @elqora/artifacts 0.1.0, got ${artifactPackage.version}`);
-if (ARTIFACT_PROTOCOL_VERSION !== "1.0") throw new Error(`Expected Artifact Protocol 1.0, got ${ARTIFACT_PROTOCOL_VERSION}`);
-if (ARTIFACT_PACKAGE_COMPATIBILITY !== ">=0.1.0 <0.2.0" || ARTIFACT_PROTOCOL_COMPATIBILITY !== ">=1.0 <2.0") throw new Error("Declared Artifact compatibility range changed unexpectedly");
+if (artifactPackage.version !== "0.2.0") throw new Error(`Expected local @elqora/artifacts 0.2.0, got ${artifactPackage.version}`);
+if (ARTIFACT_PROTOCOL_VERSION !== "1.1") throw new Error(`Expected Artifact Protocol 1.1, got ${ARTIFACT_PROTOCOL_VERSION}`);
+if (ARTIFACT_PACKAGE_COMPATIBILITY !== ">=0.2.0 <0.3.0" || ARTIFACT_PROTOCOL_COMPATIBILITY !== ">=1.1 <2.0") throw new Error("Declared Artifact compatibility range changed unexpectedly");
 let localStatus = "local source not present";
 try {
   const localPackage = JSON.parse(await readFile(new URL("../../elqora/artifacts/packages/typescript/package.json", import.meta.url), "utf8"));

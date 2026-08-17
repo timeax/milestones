@@ -1,4 +1,4 @@
-import type { ApprovalRecord, ApprovalRecordId, Milestone, MilestoneAcceptance, MilestoneProfile, MilestoneRevision } from "../../model/domain.js";
+import type { ApprovalRecord, ApprovalRecordId, ChallengeEvidence, Milestone, MilestoneAcceptance, MilestoneProfile, MilestoneRevision } from "../../model/domain.js";
 import type { ValidationIssue } from "../../model/errors.js";
 import { addIssue, duplicates, nonEmpty, validateApprovalStages, validateCriteria, validateDeliverables, validateUniqueIds } from "./common.js";
 import { validateRevisions } from "./revisions.js";
@@ -62,6 +62,7 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
   }
 
   validateUniqueIds(issues, milestone.challenges, "challenges");
+  const evidenceIds = new Set<string>();
   for (const challenge of milestone.challenges) {
     const target = challenge.target;
     if (!["open", "under_review", "resolved", "rejected", "withdrawn", "reopened"].includes(challenge.state)) addIssue(issues, "invalid_state", `challenges.${challenge.id}.state`, "Challenge state is invalid");
@@ -72,6 +73,7 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
     if (target.type === "deliverable_requirement" && !milestone.deliverables.some((value) => value.id === target.deliverableRequirementId)) addIssue(issues, "missing_challenge_target", `challenges.${challenge.id}.target`, "Challenge deliverable target does not exist");
     if (target.type === "review" && !milestone.reviews.some((value) => value.id === target.reviewId)) addIssue(issues, "missing_challenge_target", `challenges.${challenge.id}.target`, "Challenge review target does not exist");
     if (target.type === "evidence" && !nonEmpty(target.ref)) addIssue(issues, "missing_challenge_target", `challenges.${challenge.id}.target.ref`, "Challenge evidence reference must be non-empty");
+    validateChallengeEvidence(issues, milestone, challenge.id, challenge.milestoneRevisionId, challenge.evidence, evidenceIds);
   }
 
   const stages = milestone.approvalPolicy?.stages ?? [];
@@ -118,6 +120,38 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
 
   if (profile !== undefined) validateProfileState(issues, milestone, profile, stages.length);
   return issues;
+}
+
+function validateChallengeEvidence(
+  issues: ValidationIssue[], milestone: Milestone, challengeId: string, revisionId: string,
+  evidence: readonly ChallengeEvidence[], globalIds: Set<string>,
+): void {
+  const byId = new Map(evidence.map((value) => [value.id, value]));
+  for (const [index, value] of evidence.entries()) {
+    const path = `challenges.${challengeId}.evidence.${value.id}`;
+    if (!nonEmpty(value.id) || globalIds.has(value.id)) addIssue(issues, "duplicate_challenge_evidence_id", path, "Challenge evidence IDs must be globally unique");
+    globalIds.add(value.id);
+    if (value.milestoneId !== milestone.id || value.challengeId !== challengeId || value.milestoneRevisionId !== revisionId) addIssue(issues, "challenge_evidence_ownership_mismatch", path, "Evidence must belong to its containing challenge, milestone, and revision");
+    if (!nonEmpty(value.title)) addIssue(issues, "invalid_challenge_evidence", `${path}.title`, "Evidence title must be non-empty");
+    if (!nonEmpty(value.description)) addIssue(issues, "invalid_challenge_evidence", `${path}.description`, "Evidence description must be non-empty");
+    if (!nonEmpty(value.createdAt) || !["supporting", "response"].includes(value.kind) || !["active", "superseded", "withdrawn"].includes(value.state)) addIssue(issues, "invalid_challenge_evidence", path, "Evidence kind, state, and creation time must be valid");
+    if (value.state === "withdrawn") {
+      if (value.withdrawnAt === undefined || value.withdrawalReason === undefined || !nonEmpty(value.withdrawnAt) || !nonEmpty(value.withdrawalReason)) addIssue(issues, "invalid_challenge_evidence_withdrawal", path, "Withdrawn evidence requires time and reason");
+    } else if (value.withdrawnAt !== undefined || value.withdrawalReason !== undefined || value.withdrawnBy !== undefined) addIssue(issues, "invalid_challenge_evidence_withdrawal", path, "Only withdrawn evidence may carry withdrawal fields");
+    if (value.supersedesEvidenceId !== undefined) {
+      const predecessor = byId.get(value.supersedesEvidenceId);
+      if (predecessor === undefined || predecessor.id === value.id || evidence.indexOf(predecessor) >= index) addIssue(issues, "invalid_challenge_evidence_supersession", path, "Evidence must supersede an earlier evidence record in the same challenge");
+      else if (predecessor.state !== "superseded") addIssue(issues, "invalid_challenge_evidence_supersession", path, "Superseded predecessor must have superseded state");
+    }
+  }
+  for (const value of evidence) {
+    if (value.state === "superseded" && !evidence.some((candidate) => candidate.supersedesEvidenceId === value.id)) addIssue(issues, "invalid_challenge_evidence_supersession", `challenges.${challengeId}.evidence.${value.id}`, "Superseded evidence must be referenced by a successor");
+    const seen = new Set<string>(); let cursor: ChallengeEvidence | undefined = value;
+    while (cursor?.supersedesEvidenceId !== undefined) {
+      if (seen.has(cursor.id)) { addIssue(issues, "cyclic_challenge_evidence_supersession", `challenges.${challengeId}.evidence.${value.id}`, "Evidence supersession must not cycle"); break; }
+      seen.add(cursor.id); cursor = byId.get(cursor.supersedesEvidenceId);
+    }
+  }
 }
 
 function validateProfileState(issues: ValidationIssue[], milestone: Milestone, profile: MilestoneProfile, stageCount: number): void {

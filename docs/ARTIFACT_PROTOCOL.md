@@ -1,9 +1,9 @@
 # Artifact Protocol compatibility and evidence
 
 This package consumes canonical records from `@elqora/artifacts` and declares
-package compatibility `>=0.1.0 <0.2.0` with Artifact Protocol compatibility
-`>=1.0 <2.0`. Development and compatibility checks use the local
-`@elqora/artifacts` 0.1.0 TypeScript project; packed consumer checks install the
+package compatibility `>=0.2.0 <0.3.0` with Artifact Protocol compatibility
+`>=1.1 <2.0`. Development and compatibility checks use the local
+`@elqora/artifacts` 0.2.0 TypeScript project; packed consumer checks install the
 published npm package.
 
 Milestones own only requirement references, milestone-specific link roles and

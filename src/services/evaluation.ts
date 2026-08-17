@@ -18,6 +18,7 @@ import type {
   ProgressResult,
 } from "../model/domain.js";
 import { evaluateMilestoneDependencies } from "./graph.js";
+import { resolveChallengeEvidenceSources } from "./challenge-evidence.js";
 
 export function defaultEvaluationPolicy(profile: MilestoneProfile): MilestoneEvaluationPolicySnapshot {
   return {
@@ -205,7 +206,20 @@ export function evaluateAcceptance(milestone: Milestone, profile: MilestoneProfi
   const challenges = milestone.challenges.filter((challenge) => challenge.milestoneRevisionId === milestone.currentRevisionId).map((challenge) => {
     const blocking = policy.blockingChallengesPreventAcceptance && challenge.severity === "blocking" && (challenge.state === "open" || challenge.state === "under_review" || challenge.state === "reopened");
     if (blocking) reasons.push({ code: "blocking_challenge", subjectId: challenge.id, message: `Blocking challenge ${challenge.id} is unresolved` });
-    return { id: challenge.id, target: structuredClone(challenge.target), severity: challenge.severity, state: challenge.state, ...(challenge.resolution === undefined ? {} : { resolution: structuredClone(challenge.resolution) }), blocking };
+    const evidence = challenge.evidence.map((item) => {
+      const resolution = resolveChallengeEvidenceSources(item, artifacts);
+      return {
+        id: item.id,
+        kind: item.kind,
+        title: item.title,
+        description: item.description,
+        state: item.state,
+        ...(item.supersedesEvidenceId === undefined ? {} : { supersedesEvidenceId: item.supersedesEvidenceId }),
+        sourceStatus: resolution.status,
+        sources: structuredClone(resolution.sources),
+      };
+    });
+    return { id: challenge.id, target: structuredClone(challenge.target), severity: challenge.severity, state: challenge.state, ...(challenge.resolution === undefined ? {} : { resolution: structuredClone(challenge.resolution) }), blocking, evidence };
   });
   const reviews = milestone.reviews.filter((review) => review.milestoneRevisionId === milestone.currentRevisionId).map((review) => ({ id: review.id, milestoneRevisionId: review.milestoneRevisionId, state: review.state, ...(review.result === undefined ? {} : { result: review.result }), artifactVersionIds: [...(review.artifactVersionIds ?? [])], satisfied: review.state === "completed" && review.result === policy.requiredReviewResult }));
   if (profile.reviews.enabled && policy.requireReviewWhenProfileRequires && !reviews.some((review) => review.satisfied)) reasons.push({ code: "incomplete_review", subjectId: milestone.id, message: "A completed accepted review is required for the current revision" });

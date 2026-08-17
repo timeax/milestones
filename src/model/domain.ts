@@ -20,6 +20,7 @@ export type CriterionId = Brand<string, "CriterionId">;
 export type DeliverableRequirementId = Brand<string, "DeliverableRequirementId">;
 export type DependencyId = Brand<string, "DependencyId">;
 export type ChallengeId = Brand<string, "ChallengeId">;
+export type ChallengeEvidenceId = Brand<string, "ChallengeEvidenceId">;
 export type ReviewId = Brand<string, "ReviewId">;
 export type ApprovalStageId = Brand<string, "ApprovalStageId">;
 export type ApprovalRecordId = Brand<string, "ApprovalRecordId">;
@@ -36,6 +37,7 @@ export interface MilestoneIdGenerator {
   deliverableRequirement(): DeliverableRequirementId;
   dependency(): DependencyId;
   challenge(): ChallengeId;
+  challengeEvidence(): ChallengeEvidenceId;
   review(): ReviewId;
   approvalStage(): ApprovalStageId;
   approvalRecord(): ApprovalRecordId;
@@ -116,6 +118,24 @@ export interface ChallengeResolution {
   readonly resolvedBy?: ActorRef;
   readonly resolvedAt: string;
 }
+export type ChallengeEvidenceKind = "supporting" | "response";
+export type ChallengeEvidenceState = "active" | "superseded" | "withdrawn";
+export interface ChallengeEvidence {
+  readonly id: ChallengeEvidenceId;
+  readonly milestoneId: MilestoneId;
+  readonly challengeId: ChallengeId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly kind: ChallengeEvidenceKind;
+  readonly title: string;
+  readonly description: string;
+  readonly state: ChallengeEvidenceState;
+  readonly supersedesEvidenceId?: ChallengeEvidenceId;
+  readonly createdBy?: ActorRef;
+  readonly createdAt: string;
+  readonly withdrawnBy?: ActorRef;
+  readonly withdrawnAt?: string;
+  readonly withdrawalReason?: string;
+}
 export interface MilestoneChallenge {
   readonly id: ChallengeId;
   readonly milestoneId: MilestoneId;
@@ -127,6 +147,8 @@ export interface MilestoneChallenge {
   readonly raisedBy?: ActorRef;
   readonly createdAt: string;
   readonly resolution?: ChallengeResolution;
+  /** Append-only audit material. Artifact sources are canonical Artifact Links, not embedded here. */
+  readonly evidence: readonly ChallengeEvidence[];
 }
 
 export type ReviewState = "requested" | "in_progress" | "completed" | "cancelled";
@@ -208,7 +230,7 @@ export interface MilestoneRevision {
   readonly snapshot: MilestoneRevisionSnapshot;
 }
 
-export type MilestoneArtifactSubjectType = "milestone" | "criterion" | "deliverable_requirement" | "challenge" | "review" | "approval" | "acceptance" | "completion";
+export type MilestoneArtifactSubjectType = "milestone" | "criterion" | "deliverable_requirement" | "challenge" | "challenge_evidence" | "review" | "approval" | "acceptance" | "completion";
 export type MilestoneArtifactRole = "deliverable" | "evidence" | "verification" | "challenge_evidence" | "response_evidence" | "review_evidence" | "approval_evidence" | "acceptance_evidence" | "handover";
 export type MilestoneArtifactLink = ArtifactLink<MilestoneArtifactRole, MilestoneArtifactSubjectType>;
 export interface MilestoneArtifactContext {
@@ -247,6 +269,26 @@ export interface DependencyAcceptanceSnapshot {
   readonly satisfied: boolean;
 }
 export interface ChallengeAcceptanceSnapshot { readonly id: ChallengeId; readonly target: ChallengeTarget; readonly severity: "non_blocking" | "blocking"; readonly state: ChallengeState; readonly resolution?: ChallengeResolution; readonly blocking: boolean }
+export interface ChallengeEvidenceSource {
+  readonly linkId: import("@elqora/artifacts").ArtifactLinkId;
+  readonly role: "challenge_evidence" | "response_evidence";
+  readonly artifactId: ArtifactId;
+  readonly artifactVersionId: ArtifactVersionId;
+}
+export type ChallengeEvidenceSourceIssueCode = "evidence_source_role_mismatch" | "evidence_source_unpinned" | "evidence_source_artifact_missing" | "evidence_source_version_missing";
+export interface ChallengeEvidenceSourceIssue { readonly code: ChallengeEvidenceSourceIssueCode; readonly linkId: import("@elqora/artifacts").ArtifactLinkId; readonly message: string }
+export interface ChallengeEvidenceSourceResolution { readonly evidenceId: ChallengeEvidenceId; readonly status: "pending" | "resolved" | "invalid"; readonly sources: readonly ChallengeEvidenceSource[]; readonly issues: readonly ChallengeEvidenceSourceIssue[] }
+export interface ChallengeEvidenceAcceptanceSnapshot {
+  readonly id: ChallengeEvidenceId;
+  readonly kind: ChallengeEvidenceKind;
+  readonly title: string;
+  readonly description: string;
+  readonly state: ChallengeEvidenceState;
+  readonly supersedesEvidenceId?: ChallengeEvidenceId;
+  readonly sourceStatus: ChallengeEvidenceSourceResolution["status"];
+  readonly sources: readonly ChallengeEvidenceSource[];
+}
+export interface ChallengeAcceptanceSnapshot { readonly id: ChallengeId; readonly target: ChallengeTarget; readonly severity: "non_blocking" | "blocking"; readonly state: ChallengeState; readonly resolution?: ChallengeResolution; readonly blocking: boolean; readonly evidence: readonly ChallengeEvidenceAcceptanceSnapshot[] }
 export interface ReviewAcceptanceSnapshot { readonly id: ReviewId; readonly milestoneRevisionId: MilestoneRevisionId; readonly state: ReviewState; readonly result?: ReviewResult; readonly artifactVersionIds: readonly ArtifactVersionId[]; readonly satisfied: boolean }
 export interface ApprovalAcceptanceSnapshot { readonly stageId: ApprovalStageId; readonly milestoneRevisionId: MilestoneRevisionId; readonly effectiveApprovalCount: number; readonly requiredApprovalCount: number; readonly satisfied: boolean; readonly waived: boolean; readonly actorIds: readonly string[] }
 export interface MilestoneAcceptanceSnapshot {
@@ -356,6 +398,7 @@ export type MilestoneChange =
   | { readonly type: "deliverable_changed"; readonly deliverableRequirementId: DeliverableRequirementId }
   | { readonly type: "dependency_changed"; readonly dependencyId: DependencyId }
   | { readonly type: "challenge_changed"; readonly challengeId: ChallengeId }
+  | { readonly type: "challenge_evidence_changed"; readonly challengeId: ChallengeId; readonly challengeEvidenceId: ChallengeEvidenceId }
   | { readonly type: "review_changed"; readonly reviewId: ReviewId }
   | { readonly type: "approval_recorded"; readonly approvalRecordId: ApprovalRecordId }
   | { readonly type: "approval_policy_changed"; readonly approvalStageId: ApprovalStageId }
@@ -386,6 +429,9 @@ export type DependencyRemovedEvent = EventBase<"dependency.removed", { readonly 
 export type ChallengeRaisedEvent = EventBase<"challenge.raised", { readonly challenge: MilestoneChallenge }>;
 export type ChallengeChangedEvent = EventBase<"challenge.changed", { readonly challengeId: ChallengeId; readonly state: ChallengeState }>;
 export type ChallengeResolvedEvent = EventBase<"challenge.resolved", { readonly challengeId: ChallengeId; readonly resolution: ChallengeResolution }>;
+export type ChallengeEvidenceAddedEvent = EventBase<"challenge.evidence_added", { readonly evidence: ChallengeEvidence }>;
+export type ChallengeEvidenceSupersededEvent = EventBase<"challenge.evidence_superseded", { readonly previousEvidenceId: ChallengeEvidenceId; readonly evidence: ChallengeEvidence }>;
+export type ChallengeEvidenceWithdrawnEvent = EventBase<"challenge.evidence_withdrawn", { readonly challengeId: ChallengeId; readonly challengeEvidenceId: ChallengeEvidenceId; readonly reason: string }>;
 export type ReviewRequestedEvent = EventBase<"review.requested", { readonly review: MilestoneReview }>;
 export type ReviewChangedEvent = EventBase<"review.changed", { readonly reviewId: ReviewId; readonly state: ReviewState }>;
 export type ReviewCompletedEvent = EventBase<"review.completed", { readonly reviewId: ReviewId; readonly result: ReviewResult }>;
@@ -398,7 +444,7 @@ export type ProfileChangedEvent = EventBase<"profile.changed", { readonly profil
 export type MilestoneAcceptedEvent = EventBase<"milestone.accepted", { readonly acceptance: MilestoneAcceptance }>;
 export type MilestoneCompletedEvent = EventBase<"milestone.completed", { readonly completion: MilestoneCompletion }>;
 export type MilestoneReopenedEvent = EventBase<"milestone.reopened", { readonly effect: ReopenEffect; readonly reason: string; readonly cause?: ReopenCause }>;
-export type MilestoneEvent = MilestoneCreatedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | ApprovalStageAddedEvent | ApprovalStageChangedEvent | ApprovalStageRemovedEvent | ProfileChangedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
+export type MilestoneEvent = MilestoneCreatedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ChallengeEvidenceAddedEvent | ChallengeEvidenceSupersededEvent | ChallengeEvidenceWithdrawnEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | ApprovalStageAddedEvent | ApprovalStageChangedEvent | ApprovalStageRemovedEvent | ProfileChangedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
 
 export interface MilestoneEditResult {
   readonly milestone: Milestone;
@@ -413,7 +459,7 @@ export type JsonPrimitive = string | number | boolean | null;
 export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[];
 
 export interface MilestoneWire extends Omit<Milestone, "criteria" | "deliverables" | "dependencies" | "challenges" | "reviews" | "approvalRecords" | "acceptanceRecords" | "completionRecords" | "revisions"> {
-  readonly schemaVersion: "1.0";
+  readonly schemaVersion: "1.1";
   readonly criteria: readonly Criterion[];
   readonly deliverables: readonly DeliverableRequirement[];
   readonly dependencies: readonly MilestoneDependency[];

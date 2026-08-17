@@ -41,6 +41,7 @@ export class ChallengeEditor {
       reason,
       severity,
       state: "open" as const,
+      evidence: [],
       ...(raisedBy === undefined ? {} : { raisedBy }),
       createdAt: this.session.clock.now(),
     };

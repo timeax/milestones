@@ -41,7 +41,7 @@ export interface MilestoneGraphNodeWire extends Omit<MilestoneGraphNode, "gates"
   };
 }
 export interface MilestoneArtifactContextWire {
-  readonly schemaVersion: "1.0";
+  readonly schemaVersion: typeof ARTIFACT_PROTOCOL_VERSION;
   readonly requirements: readonly ArtifactRequirement[];
   readonly artifacts: readonly Artifact[];
   readonly versions: readonly ArtifactVersion[];
@@ -90,11 +90,11 @@ export function deserializeGraph(wire: MilestoneGraphWire): MilestoneGraphSnapsh
   return { milestones: new Map(nodes.map((node) => [node.id, node])), dependencies: structuredClone(wire.dependencies) };
 }
 export function serializeArtifactContext(context: MilestoneArtifactContext): MilestoneArtifactContextWire {
-  const wire = { schemaVersion: "1.0" as const, requirements: [...context.requirements.values()], artifacts: [...context.artifacts.values()], versions: [...context.versions.values()], submissions: [...context.submissions.values()], verifications: [...context.verifications.values()], links: [...context.links] };
+  const wire = { schemaVersion: ARTIFACT_PROTOCOL_VERSION, requirements: [...context.requirements.values()], artifacts: [...context.artifacts.values()], versions: [...context.versions.values()], submissions: [...context.submissions.values()], verifications: [...context.verifications.values()], links: [...context.links] };
   assertSerializable(wire); return structuredClone(wire);
 }
 export function deserializeArtifactContext(wire: MilestoneArtifactContextWire): MilestoneArtifactContext {
-  invariant(wire.schemaVersion === "1.0", "SERIALIZATION_INVALID", "Unsupported artifact context schemaVersion");
+  invariant(wire.schemaVersion === ARTIFACT_PROTOCOL_VERSION, "SERIALIZATION_INVALID", "Unsupported artifact context schemaVersion");
   const records = [...wire.requirements, ...wire.artifacts, ...wire.versions, ...wire.submissions, ...wire.verifications, ...wire.links];
   invariant(records.every((record) => record.schemaVersion === ARTIFACT_PROTOCOL_VERSION), "SERIALIZATION_INVALID", `Artifact context contains a record outside protocol ${ARTIFACT_PROTOCOL_VERSION}`);
   return {

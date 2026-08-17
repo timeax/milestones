@@ -1,6 +1,6 @@
 # Stabilization and contract freeze
 
-The `0.1.x` line implements Milestone Protocol `1.0` while retaining a `0.x`
+The `0.1.x` line implements Milestone Protocol `1.1` while retaining a `0.x`
 package version for integration feedback. The following public contracts are
 frozen by the protocol version and package semantic-versioning policy:
 
@@ -14,8 +14,8 @@ frozen by the protocol version and package semantic-versioning policy:
 | acceptance, completion, and reopening | deterministic evaluations, append-only ledgers, and explicit invalidation effects |
 | events and concurrency | typed event union, per-aggregate sequence, correlation/causation metadata, and host CAS guidance |
 | reason codes | discriminated evaluation result contracts |
-| serialization | `MILESTONE_PROTOCOL_VERSION = "1.0"`, canonical JSON, committed compatibility fixtures, and migration routing |
-| Artifact Protocol integration | peer range `@elqora/artifacts >=0.1.0 <0.2.0` and protocol range `>=1.0 <2.0` |
+| serialization | `MILESTONE_PROTOCOL_VERSION = "1.1"`, canonical JSON, v1.0 migration fixtures, and migration routing |
+| Artifact Protocol integration | peer range `@elqora/artifacts >=0.2.0 <0.3.0` and protocol range `>=1.1 <2.0` |
 | package API | curated root and documented subpath export map with exact export snapshots |
 
 Any incompatible change to a protocol-owned wire shape requires a new

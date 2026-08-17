@@ -30,6 +30,7 @@ import { CriteriaEditor, createCriteriaEditor } from "./criteria-editor.js";
 import { DefinitionEditor, createDefinitionEditor } from "./definition-editor.js";
 import { DeliverableEditor, createDeliverableEditor } from "./deliverable-editor.js";
 import { DependencyEditor, createDependencyEditor } from "./dependency-editor.js";
+import { EvidenceEditor, createEvidenceEditor } from "./evidence-editor.js";
 import type { MilestoneEditorOptions } from "./editor-contracts.js";
 import {
   createHistoryState,
@@ -54,6 +55,7 @@ export class MilestoneEditor {
   public readonly deliverables: DeliverableEditor;
   public readonly dependencies: DependencyEditor;
   public readonly challenges: ChallengeEditor;
+  public readonly evidence: EvidenceEditor;
   public readonly reviews: ReviewEditor;
   public readonly approvals: ApprovalEditor;
   public readonly revisions: RevisionEditor;
@@ -102,6 +104,7 @@ export class MilestoneEditor {
     this.deliverables = historyAwareCommands(this.session, createDeliverableEditor(this.session));
     this.dependencies = historyAwareCommands(this.session, createDependencyEditor(this.session));
     this.challenges = historyAwareCommands(this.session, createChallengeEditor(this.session));
+    this.evidence = historyAwareCommands(this.session, createEvidenceEditor(this.session));
     this.reviews = historyAwareCommands(this.session, createReviewEditor(this.session));
     this.approvals = historyAwareCommands(this.session, createApprovalEditor(this.session));
     this.revisions = historyAwareCommands(this.session, createRevisionEditor(this.session));

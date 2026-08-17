@@ -15,6 +15,7 @@ export {
   evaluateCompletion,
   evaluateDependency,
 } from "./public/evaluation.js";
+export { resolveChallengeEvidenceSources } from "./services/challenge-evidence.js";
 export {
   affectedMilestoneIds,
   assertValidGraph,
@@ -49,6 +50,7 @@ export type {
 } from "./editors/editor-contracts.js";
 export { ApprovalEditor } from "./editors/approval-editor.js";
 export { ChallengeEditor } from "./editors/challenge-editor.js";
+export { EvidenceEditor, type ChallengeEvidenceInput } from "./editors/evidence-editor.js";
 export { CriteriaEditor } from "./editors/criteria-editor.js";
 export { DefinitionEditor } from "./editors/definition-editor.js";
 export { DeliverableEditor } from "./editors/deliverable-editor.js";

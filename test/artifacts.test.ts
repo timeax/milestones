@@ -4,20 +4,20 @@ import { ARTIFACT_PACKAGE_COMPATIBILITY, ARTIFACT_PROTOCOL_COMPATIBILITY, ARTIFA
 import { actor, create } from "./helpers.js";
 
 function artifactContext(subjectId: string, status: ArtifactVerification["status"] = "verified"): MilestoneArtifactContext {
-  const requirement: ArtifactRequirement = { schemaVersion: "1.0", id: "req-1", required: true, minimumCount: 1, allowedKinds: ["report"], allowedValueTypes: ["file"] };
-  const artifact: Artifact = { schemaVersion: "1.0", id: "artifact-1", kind: "report", valueType: "file", currentVersionId: "version-1", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z", updatedAt: "2026-08-15T00:00:00Z" };
-  const version: ArtifactVersion = { schemaVersion: "1.0", id: "version-1", artifactId: artifact.id, version: 1, source: { type: "url", url: "https://example.test/report" }, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z" };
-  const submission: ArtifactSubmission = { schemaVersion: "1.0", id: "submission-1", artifactId: artifact.id, artifactVersionId: version.id, submittedBy: { type: "user", id: "author" }, submittedAt: "2026-08-15T01:00:00Z" };
-  const verification: ArtifactVerification = { schemaVersion: "1.0", id: "verification-1", artifactId: artifact.id, artifactVersionId: version.id, submissionId: submission.id, status, createdAt: "2026-08-15T02:00:00Z", verifiedAt: "2026-08-15T02:00:00Z", verifiedBy: { type: "user", id: "verifier" } };
-  const link: MilestoneArtifactLink = { schemaVersion: "1.0", id: "link-1", artifactId: artifact.id, artifactVersionId: version.id, subject: { type: "criterion", id: subjectId }, role: "evidence", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T01:00:00Z", metadata: { artifactRequirementId: requirement.id } };
+  const requirement: ArtifactRequirement = { schemaVersion: "1.1", id: "req-1", required: true, minimumCount: 1, allowedKinds: ["report"], allowedValueTypes: ["file"] };
+  const artifact: Artifact = { schemaVersion: "1.1", id: "artifact-1", kind: "report", valueType: "file", currentVersionId: "version-1", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z", updatedAt: "2026-08-15T00:00:00Z" };
+  const version: ArtifactVersion = { schemaVersion: "1.1", id: "version-1", artifactId: artifact.id, version: 1, source: { type: "url", url: "https://example.test/report" }, createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T00:00:00Z" };
+  const submission: ArtifactSubmission = { schemaVersion: "1.1", id: "submission-1", artifactId: artifact.id, artifactVersionId: version.id, submittedBy: { type: "user", id: "author" }, submittedAt: "2026-08-15T01:00:00Z" };
+  const verification: ArtifactVerification = { schemaVersion: "1.1", id: "verification-1", artifactId: artifact.id, artifactVersionId: version.id, submissionId: submission.id, status, createdAt: "2026-08-15T02:00:00Z", verifiedAt: "2026-08-15T02:00:00Z", verifiedBy: { type: "user", id: "verifier" } };
+  const link: MilestoneArtifactLink = { schemaVersion: "1.1", id: "link-1", artifactId: artifact.id, artifactVersionId: version.id, subject: { type: "criterion", id: subjectId }, role: "evidence", createdBy: { type: "user", id: "author" }, createdAt: "2026-08-15T01:00:00Z", metadata: { artifactRequirementId: requirement.id } };
   return { requirements: new Map([[requirement.id, requirement]]), artifacts: new Map([[artifact.id, artifact]]), versions: new Map([[version.id, version]]), submissions: new Map([[submission.id, submission]]), verifications: new Map([[verification.id, verification]]), links: [link] };
 }
 
 describe("Artifact Protocol integration", () => {
   it("pins the supported package and protocol compatibility", () => {
-    expect(ARTIFACT_PROTOCOL_VERSION).toBe("1.0");
-    expect(ARTIFACT_PACKAGE_COMPATIBILITY).toBe(">=0.1.0 <0.2.0");
-    expect(ARTIFACT_PROTOCOL_COMPATIBILITY).toBe(">=1.0 <2.0");
+    expect(ARTIFACT_PROTOCOL_VERSION).toBe("1.1");
+    expect(ARTIFACT_PACKAGE_COMPATIBILITY).toBe(">=0.2.0 <0.3.0");
+    expect(ARTIFACT_PROTOCOL_COMPATIBILITY).toBe(">=1.1 <2.0");
   });
 
   it("evaluates canonical requirements/submissions/verifications and captures exact version records", () => {

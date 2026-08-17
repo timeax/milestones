@@ -122,7 +122,7 @@ describe("graph-context corruption validation", () => {
     const corrupt = {
       ...minimal,
       reviews: [{ id: asReviewId("r"), milestoneId: minimal.id, milestoneRevisionId: minimal.currentRevisionId, state: "cancelled" as const, result: "accepted" as const, createdAt: minimal.createdAt }],
-      challenges: [{ id: asChallengeId("c"), milestoneId: minimal.id, milestoneRevisionId: minimal.currentRevisionId, target: { type: "evidence" as const, ref: "" }, reason: "x", severity: "non_blocking" as const, state: "open" as const, createdAt: minimal.createdAt }],
+      challenges: [{ id: asChallengeId("c"), milestoneId: minimal.id, milestoneRevisionId: minimal.currentRevisionId, target: { type: "evidence" as const, ref: "" }, reason: "x", severity: "non_blocking" as const, state: "open" as const, createdAt: minimal.createdAt, evidence: [] }],
     };
     expect(validateMilestone(corrupt).map((item) => item.code)).toEqual(expect.arrayContaining(["unexpected_review_result", "missing_challenge_target"]));
   });

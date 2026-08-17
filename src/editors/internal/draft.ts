@@ -6,6 +6,8 @@ import type {
   MilestoneDependency,
   MilestoneReview,
   MilestoneRevision,
+  MilestoneChallenge,
+  ChallengeEvidence,
 } from "../../model/domain.js";
 
 export type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -26,7 +28,7 @@ export interface DraftMilestone extends Omit<
   criteria: Criterion[];
   deliverables: DeliverableRequirement[];
   dependencies: MilestoneDependency[];
-  challenges: Mutable<Milestone["challenges"][number]>[];
+  challenges: (Omit<Mutable<MilestoneChallenge>, "evidence"> & { evidence: Mutable<ChallengeEvidence>[] })[];
   reviews: Mutable<MilestoneReview>[];
   approvalRecords: ApprovalRecord[];
   acceptanceRecords: Milestone["acceptanceRecords"][number][];
