@@ -64,3 +64,4 @@ export {
   MAX_EDITOR_HISTORY_LIMIT,
   type MilestoneEditorHistory,
 } from "./editors/editor-history.js";
+export * from "./dom/index.js";
