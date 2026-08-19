@@ -1,4 +1,4 @@
-# milestones
+# Milestones
 
 A storage-neutral TypeScript domain engine for milestone definition, revision,
 evaluation, acceptance, completion, reopening, and auditing. It integrates with
