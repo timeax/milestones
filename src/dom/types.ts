@@ -1411,40 +1411,78 @@ export interface AcceptanceStatusDocument {
 /*                                 Completion                                 */
 /* -------------------------------------------------------------------------- */
 
-export interface MilestoneCompletionOverviewDocument {
+export interface CompletionOverviewDocument {
   getId(): CompletionId;
+
   getRevisionId(): MilestoneRevisionId;
+
   getAcceptanceId(): AcceptanceId;
+
   getCompletedAt(): string;
-  getActor(): ActorRef | undefined;
-  getReason(): TextDocument;
+
   isCurrent(): boolean;
 }
 
-export interface MilestoneCompletionDocument {
+export interface CompletionDocument {
   getId(): CompletionId;
-  getOverview(): MilestoneCompletionOverviewDocument;
+
+  getOverview(): CompletionOverviewDocument;
+
   getRevisionId(): MilestoneRevisionId;
+
   getAcceptanceId(): AcceptanceId;
+
   getCompletedAt(): string;
+
   getActor(): ActorRef | undefined;
+
   getReason(): TextDocument;
+
+  hasReason(): boolean;
+
+  /**
+   * Whether the Milestone currently points at this Completion record.
+   */
   isCurrent(): boolean;
 }
 
-export interface MilestoneCompletionsDocument
+export interface CompletionHistoryDocument
   extends DocumentCollection<
     CompletionId,
-    MilestoneCompletionOverviewDocument,
-    MilestoneCompletionDocument
+    CompletionOverviewDocument,
+    CompletionDocument
   > {
-  getCurrent(): MilestoneCompletionDocument | undefined;
-  hasCurrent(): boolean;
+  getForRevision(
+    revisionId: MilestoneRevisionId,
+  ): readonly CompletionDocument[];
+
+  getForAcceptance(
+    acceptanceId: AcceptanceId,
+  ): readonly CompletionDocument[];
+
+  getLatest(): CompletionDocument | undefined;
 }
 
-export interface MilestoneCompletionStatusDocument {
+export interface CompletionStatusDocument {
+  /**
+   * Whether the Milestone currently has an effective Completion record.
+   */
+  isCompleted(): boolean;
+
+  /**
+   * Whether current completion evaluation passes.
+   *
+   * This is evaluation eligibility, not a promise that every possible Editor
+   * command would succeed. Lifecycle/concurrency rules still belong to the
+   * Editor.
+   */
   canComplete(): boolean;
+
   getIssues(): MilestoneIssuesDocument;
+
+  getCurrent(): CompletionDocument | undefined;
+
+  getHistory(): CompletionHistoryDocument;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1459,46 +1497,85 @@ export interface MilestoneCompletionStatusDocument {
  */
 export interface MilestoneOverviewDocument {
   getId(): MilestoneId;
+
   getTitle(): string;
+
   getKey(): string | undefined;
-  getState(): DerivedMilestoneState;
+
+  getDefinition(): MilestoneDefinitionDocument;
 
   /**
-   * Explicit navigation to potentially large narrative content.
-   *
-   * Calling getOverview() itself should not require consumers to render or
-   * serialize the entire description.
+   * Potentially large description remains independently readable.
    */
   getDescription(): TextDocument;
-  getProgress(): MilestoneProgressDocument;
+
+  getState(): DerivedMilestoneState;
+
+  getSequence(): number;
+
   getCurrentRevisionId(): MilestoneRevisionId;
-  isBlocked(): boolean;
-  isAccepted(): boolean;
-  isCompleted(): boolean;
-  getCriterionCount(): number;
-  getRequiredCriterionCount(): number;
-  getSatisfiedCriterionCount(): number;
-  getDeliverableCount(): number;
-  getRequiredDeliverableCount(): number;
-  getSatisfiedDeliverableCount(): number;
-  getDependencyCount(): number;
-  getBlockingDependencyCount(): number;
-  getChallengeCount(): number;
-  getOpenChallengeCount(): number;
-  getBlockingChallengeCount(): number;
-  getReviewCount(): number;
-  getPendingReviewCount(): number;
+
+  getCurrentRevisionNumber(): number;
+
+  getProgress(): MilestoneProgressDocument;
+
+  getReadiness(): MilestoneReadinessDocument;
 
   /**
-   * Sources attached directly to the milestone.
+   * undefined means graph context is unavailable.
+   */
+  isBlocked(): boolean | undefined;
+
+  /**
+   * undefined means graph context is unavailable.
+   */
+  isReady(): boolean | undefined;
+
+  /**
+   * Whether there is currently an effective Acceptance.
+   */
+  isAccepted(): boolean;
+
+  /**
+   * Whether there is currently an effective Completion.
+   */
+  isCompleted(): boolean;
+
+  getCriterionCount(): number;
+
+  getDeliverableCount(): number;
+
+  getDependencyCount(): number;
+
+  /**
+   * Current-revision Challenges only.
+   */
+  getChallengeCount(): number;
+
+  /**
+   * Current-revision unresolved Challenges.
+   */
+  getOpenChallengeCount(): number;
+
+  /**
+   * Current-revision Challenges that actually block acceptance.
+   */
+  getBlockingChallengeCount(): number;
+
+  /**
+   * Current-revision Reviews only.
+   */
+  getReviewCount(): number;
+
+  /**
+   * All Sources participating in the current revision.
    */
   getSourceCount(): number;
 
-  /**
-   * Sources anywhere in the milestone document tree.
-   */
-  getTotalSourceCount(): number;
+  getRevisionCount(): number;
+
   getCreatedAt(): string;
+
   getUpdatedAt(): string | undefined;
 }
 
@@ -1616,10 +1693,10 @@ export interface MilestoneDocumentContract {
   /* Completion                                                             */
   /* ---------------------------------------------------------------------- */
 
-  getCompletionStatus(): MilestoneCompletionStatusDocument;
+  getCompletionStatus(): CompletionStatusDocument;
   canComplete(): boolean;
   getCompletionIssues(): MilestoneIssuesDocument;
-  getCompletions(): MilestoneCompletionsDocument;
-  getCurrentCompletion(): MilestoneCompletionDocument | undefined;
+  getCompletions(): CompletionHistoryDocument;
+  getCurrentCompletion(): CompletionDocument | undefined;
 }
 
