@@ -4,7 +4,7 @@
 
 ## 1. Status
 
-This is the normative domain specification for `@elqora/milestones`.
+This is the normative domain specification for `@timeax/milestones`.
 
 **MUST**, **MUST NOT**, **SHOULD**, and **MAY** describe required, prohibited, recommended, and optional behavior.
 
@@ -14,7 +14,7 @@ TypeScript examples are conceptual contracts. They define intended semantics and
 
 ## 2. Purpose and boundary
 
-`@elqora/milestones` owns the internal truth and lifecycle of a milestone.
+`@timeax/milestones` owns the internal truth and lifecycle of a milestone.
 
 The package owns:
 
@@ -76,7 +76,7 @@ Relationships such as `upgrades`, `extends`, and `replaces` also belong outside 
 
 ## 3. Artifact protocol dependency
 
-`@elqora/milestones` uses `@elqora/artifacts` as its canonical artifact protocol.
+`@timeax/milestones` uses `@elqora/artifacts` as its canonical artifact protocol.
 
 The milestone package MUST NOT redefine artifact-domain concepts already owned by `@elqora/artifacts`, including:
 
@@ -1274,7 +1274,7 @@ These external records remain outside the milestone package.
 ## 17. Package model
 
 ```text
-@elqora/milestones
+@timeax/milestones
 │
 ├── Identity and Actor References
 ├── Profiles

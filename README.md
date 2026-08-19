@@ -11,7 +11,7 @@ import {
   FixedMilestoneClock,
   MilestoneEditor,
   SequenceMilestoneIdGenerator,
-} from "@elqora/milestones";
+} from "@timeax/milestones";
 
 const ids = new SequenceMilestoneIdGenerator("demo");
 const clock = new FixedMilestoneClock("2026-08-15T00:00:00.000Z");
@@ -53,7 +53,7 @@ provider, Git, or artifact-storage operations.
 
 ## Compatibility
 
-`@elqora/milestones` 0.1.x supports `@elqora/artifacts >=0.2.0 <0.3.0`
+`@timeax/milestones` 0.1.x supports `@elqora/artifacts >=0.2.0 <0.3.0`
 and Artifact Protocol `>=1.1 <2.0`. Challenge evidence is append-only audit
 material with canonical, version-pinned Artifact Links; it is not an acceptance gate.
 

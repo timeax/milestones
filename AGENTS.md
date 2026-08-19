@@ -2,7 +2,7 @@
 
 ## Source of truth
 
-`OVERVIEW.md` is the normative specification for `@elqora/milestones`.
+`OVERVIEW.md` is the normative specification for `@timeax/milestones`.
 
 Before implementing or changing milestone behavior, read `OVERVIEW.md` in full and treat its MUST / MUST NOT / SHOULD / MAY rules and invariants as authoritative.
 
@@ -18,7 +18,7 @@ Inspect its public exports and protocol/package versions before implementing art
 
 Reuse its canonical artifact IDs and records. Do not redefine or duplicate Artifact, ArtifactVersion, ArtifactRequirement, ArtifactLink, ArtifactSubmission, ArtifactVerification, or their IDs inside this package.
 
-`@elqora/milestones` owns milestone relationships to artifact requirements and the milestone-domain consequences of artifact state. Artifact identity, requirement lifecycle, submissions, verification, versions, and provenance remain owned by the Artifact Protocol.
+`@timeax/milestones` owns milestone relationships to artifact requirements and the milestone-domain consequences of artifact state. Artifact identity, requirement lifecycle, submissions, verification, versions, and provenance remain owned by the Artifact Protocol.
 
 ## Package boundary
 

@@ -1,6 +1,6 @@
 # Public API and stability
 
-`@elqora/milestones` exposes a deliberately small root API plus focused subpath
+`@timeax/milestones` exposes a deliberately small root API plus focused subpath
 exports. Files below `dist/` that are not listed in the package export map are
 implementation details and cannot be imported through the package name.
 
@@ -34,7 +34,7 @@ inspection detail may evolve in a documented minor release before `1.0`.
 
 ## Testing-only contracts
 
-`@elqora/milestones/testing` contains deterministic clocks, sequential ID
+`@timeax/milestones/testing` contains deterministic clocks, sequential ID
 generators, and branded-ID helpers intended for test fixtures. Production code
 should inject its own `MilestoneClock` and `MilestoneIdGenerator` where suitable.
 
@@ -46,14 +46,14 @@ exported through the package export map and may change without notice.
 
 ## Subpath exports
 
-- `@elqora/milestones` — normal SDK usage and editor facade
-- `@elqora/milestones/model` — domain types, protocol types, and errors
-- `@elqora/milestones/evaluation` — deterministic lifecycle evaluation
-- `@elqora/milestones/graph` — dependency graph construction and analysis
-- `@elqora/milestones/serialization` — supported wire serializers
-- `@elqora/milestones/validation` — aggregate/profile/revision validation
-- `@elqora/milestones/testing` — deterministic test utilities
-- `@elqora/milestones/migrations` — protocol-version routing and migration
+- `@timeax/milestones` — normal SDK usage and editor facade
+- `@timeax/milestones/model` — domain types, protocol types, and errors
+- `@timeax/milestones/evaluation` — deterministic lifecycle evaluation
+- `@timeax/milestones/graph` — dependency graph construction and analysis
+- `@timeax/milestones/serialization` — supported wire serializers
+- `@timeax/milestones/validation` — aggregate/profile/revision validation
+- `@timeax/milestones/testing` — deterministic test utilities
+- `@timeax/milestones/migrations` — protocol-version routing and migration
 
 Sub-editors are created by `MilestoneEditor`; their constructors are not a
 supported construction API.

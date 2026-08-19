@@ -1,6 +1,6 @@
 # Architecture
 
-`@elqora/milestones` is a storage-neutral aggregate/domain engine.
+`@timeax/milestones` is a storage-neutral aggregate/domain engine.
 
 ```text
 explicit Milestone + profile + graph/artifact contexts

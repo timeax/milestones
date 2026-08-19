@@ -1,6 +1,6 @@
-# @elqora/milestones — Progress Plan
+# @timeax/milestones — Progress Plan
 
-This document defines the staged work required to harden `@elqora/milestones` from its current `0.1.0` foundation into a stable milestone domain SDK suitable for Project Manager and other consumers.
+This document defines the staged work required to harden `@timeax/milestones` from its current `0.1.0` foundation into a stable milestone domain SDK suitable for Project Manager and other consumers.
 
 The package should remain:
 
@@ -50,7 +50,7 @@ Required:
 Verify:
 
 ```text
-package: @elqora/milestones
+package: @timeax/milestones
 repository: timeax/milestones
 current version: 0.1.0
 ```
@@ -683,12 +683,12 @@ testing-only
 Consider explicit subpath exports such as:
 
 ```text
-@elqora/milestones
-@elqora/milestones/model
-@elqora/milestones/evaluation
-@elqora/milestones/graph
-@elqora/milestones/serialization
-@elqora/milestones/testing
+@timeax/milestones
+@timeax/milestones/model
+@timeax/milestones/evaluation
+@timeax/milestones/graph
+@timeax/milestones/serialization
+@timeax/milestones/testing
 ```
 
 The root package should expose the normal SDK path, not every implementation detail.
@@ -885,7 +885,7 @@ The milestone SDK stores the selector but does not resolve it.
 
 ## Definition of done
 
-Project Manager can enforce governance without leaking its role model into `@elqora/milestones`.
+Project Manager can enforce governance without leaking its role model into `@timeax/milestones`.
 
 ---
 
@@ -1993,7 +1993,7 @@ A consumer can correctly integrate the SDK without learning its architecture fro
 
 Prove that the SDK can be integrated into Project Manager without leaking application concerns into the SDK.
 
-This phase belongs partly in Project Manager, but it acts as the final architecture validation for `@elqora/milestones`.
+This phase belongs partly in Project Manager, but it acts as the final architecture validation for `@timeax/milestones`.
 
 ## Project Manager should own
 
@@ -2013,7 +2013,7 @@ notifications
 AI context
 ```
 
-## `@elqora/milestones` should own
+## `@timeax/milestones` should own
 
 ```text
 Milestone
@@ -2064,7 +2064,7 @@ Outside the SDK repository or in a dedicated integration harness:
 
 ## Definition of done
 
-Project Manager consumes `@elqora/milestones` as its milestone engine without maintaining a second milestone domain model.
+Project Manager consumes `@timeax/milestones` as its milestone engine without maintaining a second milestone domain model.
 
 ---
 
@@ -2232,7 +2232,7 @@ Host application
     └── notifications
           │
           ▼
-@elqora/milestones
+@timeax/milestones
     │
     ├── milestone definition
     ├── lifecycle
