@@ -215,19 +215,32 @@ export interface DocumentCollection<
 
 export interface MilestoneProfileDocument {
   getId(): MilestoneProfileId;
+
   getVersion(): number;
-  isCriteriaEnabled(): boolean;
-  isDeliverablesEnabled(): boolean;
-  isDependenciesEnabled(): boolean;
+
+  hasCriteria(): boolean;
+
+  hasDeliverables(): boolean;
+
+  hasDependencies(): boolean;
+
   participatesInGraph(): boolean;
-  isRevisionsEnabled(): boolean;
-  isChallengesEnabled(): boolean;
-  isReviewsEnabled(): boolean;
-  isReviewRequired(): boolean;
-  isApprovalsEnabled(): boolean;
-  isApprovalRequired(): boolean;
-  isCompletionEnabled(): boolean;
-  closesImmediatelyOnAcceptance(): boolean;
+
+  hasRevisions(): boolean;
+
+  hasChallenges(): boolean;
+
+  hasReviews(): boolean;
+
+  requiresReviews(): boolean;
+
+  hasApprovals(): boolean;
+
+  requiresApprovals(): boolean;
+
+  hasCompletion(): boolean;
+
+  closeImmediatelyOnAcceptance(): boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1593,110 +1606,51 @@ export interface MilestoneOverviewDocument {
  */
 export interface MilestoneDocumentContract {
   getId(): MilestoneId;
-  getTitle(): string;
-  getKey(): string | undefined;
+
+  getProfile(): MilestoneProfileDocument;
+
   getDefinition(): MilestoneDefinitionDocument;
 
   /**
-   * First-class direct access because milestone descriptions may be large.
+   * First-class shortcut for potentially large Milestone description content.
    */
   getDescription(): TextDocument;
-  getOverview(): MilestoneOverviewDocument;
-  getProfile(): MilestoneProfileDocument;
-  getState(): DerivedMilestoneState;
-  getCurrentRevisionId(): MilestoneRevisionId;
 
-  /* ---------------------------------------------------------------------- */
-  /* Progress / readiness                                                   */
-  /* ---------------------------------------------------------------------- */
+  getOverview(): MilestoneOverviewDocument;
 
   getProgress(): MilestoneProgressDocument;
-  getReadiness(): MilestoneReadinessDocument;
-  isBlocked(): boolean;
-  getBlockers(): readonly DependencyDocument[];
-
-  /* ---------------------------------------------------------------------- */
-  /* Criteria / deliverables / dependencies                                 */
-  /* ---------------------------------------------------------------------- */
 
   getCriteria(): CriteriaDocument;
-  getCriterion(id: CriterionId): CriterionDocument | undefined;
-  getDeliverables(): DeliverablesDocument;
-  getDeliverable(
-    id: DeliverableRequirementId,
-  ): DeliverableDocument | undefined;
-  getDependencies(): DependenciesDocument;
-  getDependency(id: DependencyId): DependencyDocument | undefined;
 
-  /* ---------------------------------------------------------------------- */
-  /* Sources                                                                */
-  /* ---------------------------------------------------------------------- */
+  getDeliverables(): DeliverablesDocument;
+
+  getDependencies(): DependenciesDocument;
+
+  getReadiness(): MilestoneReadinessDocument;
 
   /**
-   * Sources attached directly to this milestone.
+   * Sources attached directly to the Milestone subject.
    */
   getSources(): MilestoneSourcesDocument;
 
   /**
-   * Sources attached anywhere in the milestone document tree:
+   * All Sources participating in the current revision.
    *
-   * - milestone
-   * - current/historical revisions
-   * - criteria
-   * - deliverable requirements
-   * - challenges
-   * - reviews
+   * Includes Milestone, current Revision, Criteria, Deliverables,
+   * current-revision Challenges and current-revision Reviews.
    */
   getAllSources(): MilestoneSourcesDocument;
 
-  /* ---------------------------------------------------------------------- */
-  /* Challenges                                                             */
-  /* ---------------------------------------------------------------------- */
-
   getChallenges(): ChallengesDocument;
-  getChallenge(id: ChallengeId): ChallengeDocument | undefined;
-
-  /* ---------------------------------------------------------------------- */
-  /* Reviews                                                                */
-  /* ---------------------------------------------------------------------- */
 
   getReviews(): ReviewsDocument;
-  getReview(id: ReviewId): ReviewDocument | undefined;
-
-  /* ---------------------------------------------------------------------- */
-  /* Approvals                                                              */
-  /* ---------------------------------------------------------------------- */
 
   getApprovals(): ApprovalsDocument;
 
-  /* ---------------------------------------------------------------------- */
-  /* Revisions                                                              */
-  /* ---------------------------------------------------------------------- */
-
   getRevisions(): RevisionsDocument;
-  getCurrentRevision(): RevisionDocument;
-  getRevision(
-    id: MilestoneRevisionId,
-  ): RevisionDocument | undefined;
-
-  /* ---------------------------------------------------------------------- */
-  /* Acceptance                                                             */
-  /* ---------------------------------------------------------------------- */
 
   getAcceptanceStatus(): AcceptanceStatusDocument;
-  canAccept(): boolean;
-  getAcceptanceIssues(): MilestoneIssuesDocument;
-  getAcceptances(): AcceptanceHistoryDocument;
-  getCurrentAcceptance(): AcceptanceDocument | undefined;
-
-  /* ---------------------------------------------------------------------- */
-  /* Completion                                                             */
-  /* ---------------------------------------------------------------------- */
 
   getCompletionStatus(): CompletionStatusDocument;
-  canComplete(): boolean;
-  getCompletionIssues(): MilestoneIssuesDocument;
-  getCompletions(): CompletionHistoryDocument;
-  getCurrentCompletion(): CompletionDocument | undefined;
 }
 
