@@ -1,4 +1,4 @@
-import type { ActorRef, MilestoneProfile } from "../model/domain.js";
+import type { ActorRef, MilestoneProfile, MilestoneRevisionId } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 import { defaultEvaluationPolicy } from "../services/evaluation.js";
 import { validateProfile } from "../services/validation.js";
@@ -14,10 +14,10 @@ export class RevisionEditor {
     this.session = session as EditorSession;
   }
 
-  public begin(reason: string, actor?: ActorRef): void {
+  public begin(reason: string, actor?: ActorRef): MilestoneRevisionId {
     ensureOpen(this.session);
     requiredText(reason, "Revision reason");
-    beginMaterialRevision(this.session, reason, actor);
+    return beginMaterialRevision(this.session, reason, actor);
   }
 
   public applyProfile(profile: MilestoneProfile, reason: string, actor?: ActorRef): void {

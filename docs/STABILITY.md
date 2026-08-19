@@ -14,7 +14,7 @@ frozen by the protocol version and package semantic-versioning policy:
 | acceptance, completion, and reopening | deterministic evaluations, append-only ledgers, and explicit invalidation effects |
 | events and concurrency | typed event union, per-aggregate sequence, correlation/causation metadata, and host CAS guidance |
 | reason codes | discriminated evaluation result contracts |
-| serialization | `MILESTONE_PROTOCOL_VERSION = "1.1"`, canonical JSON, v1.0 migration fixtures, and migration routing |
+| serialization | `MILESTONE_PROTOCOL_VERSION = "1.2"`, canonical JSON, v1.0/v1.1 migration fixtures, and migration routing |
 | Artifact Protocol integration | peer range `@elqora/artifacts >=0.2.0 <0.3.0` and protocol range `>=1.1 <2.0` |
 | package API | curated root and documented subpath export map with exact export snapshots |
 

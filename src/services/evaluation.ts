@@ -19,6 +19,7 @@ import type {
 } from "../model/domain.js";
 import { evaluateMilestoneDependencies } from "./graph.js";
 import { resolveChallengeEvidenceSources } from "./challenge-evidence.js";
+import { resolveSources, sourceLinksForRevision } from "./sources.js";
 
 export function defaultEvaluationPolicy(profile: MilestoneProfile): MilestoneEvaluationPolicySnapshot {
   return {
@@ -228,7 +229,7 @@ export function evaluateAcceptance(milestone: Milestone, profile: MilestoneProfi
   return {
     accepted: reasons.length === 0,
     reasons: dedupeReasons(reasons),
-    snapshot: { revisionId: milestone.currentRevisionId, criteria, deliverables, dependencies: dependencyResult.snapshots, challenges, reviews, approvals, artifacts: artifactSnapshots },
+    snapshot: { revisionId: milestone.currentRevisionId, criteria, deliverables, dependencies: dependencyResult.snapshots, challenges, reviews, approvals, artifacts: artifactSnapshots, sources: resolveSources(sourceLinksForRevision(milestone, milestone.currentRevisionId), artifacts) },
   };
 }
 

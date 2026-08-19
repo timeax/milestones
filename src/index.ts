@@ -57,6 +57,8 @@ export { DeliverableEditor } from "./editors/deliverable-editor.js";
 export { DependencyEditor } from "./editors/dependency-editor.js";
 export { ReviewEditor } from "./editors/review-editor.js";
 export { RevisionEditor } from "./editors/revision-editor.js";
+export { MilestoneSourceEditor, SourceEditor } from "./editors/source-editor.js";
+export { assertValidSourceLink, isDefinitionBearing, resolveSourceLink, resolveSources, sourceLinksForRevision } from "./services/sources.js";
 export {
   DEFAULT_EDITOR_HISTORY_LIMIT,
   MAX_EDITOR_HISTORY_LIMIT,

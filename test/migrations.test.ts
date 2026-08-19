@@ -11,12 +11,12 @@ import {
 const fixtures = fileURLToPath(new URL("fixtures/", import.meta.url));
 
 describe("milestone protocol migration routing", () => {
-  it("migrates v1.0 deterministically to canonical v1.1", async () => {
+  it("migrates v1.0 deterministically to canonical v1.2", async () => {
     const value = JSON.parse(await readFile(`${fixtures}milestone-full-v1.json`, "utf8")) as unknown;
     const before = structuredClone(value);
     const first = migrateMilestoneWire(value);
     const second = migrateMilestoneWire(first.wire);
-    expect(first).toMatchObject({ fromVersion: "1.0", toVersion: "1.1", appliedMigrations: ["1.0-to-1.1"] });
+    expect(first).toMatchObject({ fromVersion: "1.0", toVersion: "1.2", appliedMigrations: ["1.0-to-1.1", "1.1-to-1.2"] });
     expect(second.wire).toEqual(first.wire);
     expect(value).toEqual(before);
     expect(first.wire.challenges.every((challenge) => Array.isArray(challenge.evidence))).toBe(true);

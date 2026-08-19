@@ -1,6 +1,6 @@
-# Serialization protocol v1.1
+# Serialization protocol v1.2
 
-`MILESTONE_PROTOCOL_VERSION` is `1.1`. It is independent of the npm package
+`MILESTONE_PROTOCOL_VERSION` is `1.2`. It is independent of the npm package
 version, Artifact Protocol version, and milestone revision number.
 
 Milestone IDs remain opaque JSON strings, timestamps are ISO/RFC 3339 strings,
@@ -9,7 +9,7 @@ omitted. Aggregate milestones contain no maps. Graph and Artifact evaluation
 contexts use their dedicated adapters, which encode maps as record arrays and
 reconstruct them with unique IDs.
 
-`serializeMilestone` returns the typed v1.1 wire object. `serializeMilestoneJson`
+`serializeMilestone` returns the typed v1.2 wire object. `serializeMilestoneJson`
 returns canonical JSON by sorting every object key while preserving semantically
 ordered arrays. Equivalent domain values therefore produce identical bytes
 regardless of metadata insertion order. Event JSON is canonicalized the same
@@ -21,5 +21,7 @@ Unknown data belongs in defined metadata extension points; it is not silently
 retained as undeclared aggregate fields. v1 readers do not guess how to consume
 future versions. A host must migrate first through the package migration layer.
 
-Committed v1.0 fixtures remain migration inputs. Canonical v1.1 wires include
-`challenge.evidence`; evidence sources remain external canonical Artifact Links.
+Committed v1.0 and v1.1 fixtures remain migration inputs. Canonical v1.2 wires
+include milestone Source links and immutable source snapshots. A milestone Source
+is a canonical Artifact Link relationship, not an Artifact Protocol `ArtifactSource`
+or embedded Artifact aggregate; evidence sources remain separate canonical links.

@@ -55,13 +55,13 @@ export function serializeMilestone(milestone: Milestone): MilestoneWire {
 }
 export function deserializeMilestone(value: unknown): Milestone {
   invariant(isRecord(value) && value["schemaVersion"] === MILESTONE_PROTOCOL_VERSION, "SERIALIZATION_INVALID", "Unsupported or missing milestone schemaVersion");
-  const allowed = new Set(["schemaVersion", "id", "profile", "currentRevisionId", "revisions", "definition", "criteria", "deliverables", "dependencies", "challenges", "reviews", "approvalPolicy", "approvalRecords", "acceptanceRecords", "currentAcceptanceId", "completionRecords", "currentCompletionId", "sequence", "createdAt", "updatedAt"]);
+  const allowed = new Set(["schemaVersion", "id", "profile", "currentRevisionId", "revisions", "definition", "sourceLinks", "criteria", "deliverables", "dependencies", "challenges", "reviews", "approvalPolicy", "approvalRecords", "acceptanceRecords", "currentAcceptanceId", "completionRecords", "currentCompletionId", "sequence", "createdAt", "updatedAt"]);
   invariant(Object.keys(value).every((key) => allowed.has(key)), "SERIALIZATION_INVALID", "Milestone wire record contains unknown top-level fields");
   const { schemaVersion: _schemaVersion, ...milestone } = value;
   invariant(
     typeof milestone["id"] === "string" && typeof milestone["currentRevisionId"] === "string" && typeof milestone["sequence"] === "number"
       && isRecord(milestone["profile"]) && isRecord(milestone["definition"])
-      && ["revisions", "criteria", "deliverables", "dependencies", "challenges", "reviews", "approvalRecords", "acceptanceRecords", "completionRecords"].every((key) => Array.isArray(milestone[key])),
+      && ["sourceLinks", "revisions", "criteria", "deliverables", "dependencies", "challenges", "reviews", "approvalRecords", "acceptanceRecords", "completionRecords"].every((key) => Array.isArray(milestone[key])),
     "SERIALIZATION_INVALID",
     "Malformed milestone wire record",
   );

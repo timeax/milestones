@@ -6,7 +6,7 @@
 explicit Milestone + profile + graph/artifact contexts
                         ↓
        one draft-based MilestoneEditor session
- definition / criteria / deliverables / dependencies
+ definition / sources / criteria / deliverables / dependencies
  challenges / reviews / approvals / revisions / history
                         ↓
  deterministic evaluation + aggregate validation
@@ -24,8 +24,9 @@ invalidations, clock, IDs, authorization callback, and history. `commit` validat
 and returns immutable-by-contract cloned values; `rollback` closes without output.
 
 Evaluation services are pure and consume only arguments. Graph services operate
-on `MilestoneGraphSnapshot`, not persistence. Artifact evaluation uses canonical
-`@elqora/artifacts` records. Events are typed audit/integration output, not a
+on `MilestoneGraphSnapshot`, not persistence. Artifact evaluation and source
+resolution use canonical `@elqora/artifacts` records. Sources are canonical
+ArtifactLink relationships, not embedded Artifact aggregates. Events are typed audit/integration output, not a
 claim that the aggregate is fully event-sourced. Serialization and migration
 adapters provide the protocol boundary.
 

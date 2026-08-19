@@ -20,8 +20,8 @@ async function fixture(name: typeof fixtureNames[number]): Promise<string> {
 }
 
 describe("milestone serialization protocol", () => {
-  it("declares protocol v1.1 independently", () => {
-    expect(MILESTONE_PROTOCOL_VERSION).toBe("1.1");
+  it("declares protocol v1.2 independently", () => {
+    expect(MILESTONE_PROTOCOL_VERSION).toBe("1.2");
   });
 
   it.each(fixtureNames)("hydrates and canonically round-trips the %s v1 fixture", async (name) => {
@@ -30,8 +30,8 @@ describe("milestone serialization protocol", () => {
     const first = serializeMilestoneJson(milestone);
     const second = serializeMilestoneJson(deserializeMilestoneJson(first));
     expect(second).toBe(first);
-    expect(JSON.parse(first)).toMatchObject({ schemaVersion: "1.1" });
-    expect(serializeMilestone(milestone).schemaVersion).toBe("1.1");
+    expect(JSON.parse(first)).toMatchObject({ schemaVersion: "1.2" });
+    expect(serializeMilestone(milestone).schemaVersion).toBe("1.2");
   });
 
   it("retains the lifecycle meaning of compatibility fixtures", async () => {

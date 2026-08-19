@@ -16,7 +16,7 @@ export function migrateMilestoneWire(value: unknown): MilestoneMigrationResult {
     const wire = serializeMilestone(deserializeMilestone(value));
     return { fromVersion: version, toVersion: MILESTONE_PROTOCOL_VERSION, appliedMigrations: [], wire };
   }
-  if (version !== "1.0") {
+  if (version !== "1.0" && version !== "1.1") {
     throw new MilestoneDomainError(
       "MIGRATION_UNSUPPORTED",
       `No milestone migration path exists from ${version} to ${MILESTONE_PROTOCOL_VERSION}`,
@@ -24,21 +24,37 @@ export function migrateMilestoneWire(value: unknown): MilestoneMigrationResult {
     );
   }
   const migrated = structuredClone(value) as Record<string, unknown>;
+  const appliedMigrations: string[] = [];
+  if (version === "1.0") {
+    const challenges = migrated["challenges"];
+    if (!Array.isArray(challenges)) throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone 1.0 wire record has malformed challenges");
+    migrated["challenges"] = challenges.map((challenge) => ({ ...(challenge as Record<string, unknown>), evidence: [] }));
+    migrated["schemaVersion"] = "1.1";
+    appliedMigrations.push("1.0-to-1.1");
+  }
+  migrateOneOneToOneTwo(migrated);
   migrated["schemaVersion"] = MILESTONE_PROTOCOL_VERSION;
-  const challenges = migrated["challenges"];
-  if (!Array.isArray(challenges)) throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone 1.0 wire record has malformed challenges");
-  migrated["challenges"] = challenges.map((challenge) => {
-    if (typeof challenge !== "object" || challenge === null || Array.isArray(challenge)) throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone 1.0 challenge is malformed");
-    return { ...(challenge as Record<string, unknown>), evidence: [] };
-  });
+  appliedMigrations.push("1.1-to-1.2");
   const wire = serializeMilestone(deserializeMilestone(migrated));
   return {
     fromVersion: version,
     toVersion: MILESTONE_PROTOCOL_VERSION,
-    appliedMigrations: ["1.0-to-1.1"],
+    appliedMigrations,
     wire,
   };
 }
+
+function migrateOneOneToOneTwo(wire: Record<string, unknown>): void {
+  wire["sourceLinks"] = [];
+  forEachRecord(wire["criteria"], "criteria", (item) => { item["sourceLinks"] = []; });
+  forEachRecord(wire["deliverables"], "deliverables", (item) => { item["sourceLinks"] = []; });
+  forEachRecord(wire["revisions"], "revisions", (item) => { item["sourceLinks"] = []; const snapshot = record(item["snapshot"], "revision snapshot"); snapshot["sources"] = []; });
+  forEachRecord(wire["challenges"], "challenges", (item) => { item["sourceLinks"] = []; if (item["resolution"] !== undefined) record(item["resolution"], "challenge resolution")["sourceSnapshot"] = []; });
+  forEachRecord(wire["reviews"], "reviews", (item) => { item["sourceLinks"] = []; if (item["state"] === "completed") item["sourceSnapshot"] = []; });
+  forEachRecord(wire["acceptanceRecords"], "acceptance records", (item) => { record(item["snapshot"], "acceptance snapshot")["sources"] = []; });
+}
+function forEachRecord(value: unknown, name: string, action: (item: Record<string, unknown>) => void): void { if (!Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone 1.1 ${name} are malformed`); value.forEach((item) => action(record(item, name))); }
+function record(value: unknown, name: string): Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone ${name} is malformed`); return value as Record<string, unknown>; }
 
 export function migrateAndDeserializeMilestone(value: unknown): Milestone {
   return deserializeMilestone(migrateMilestoneWire(value).wire);

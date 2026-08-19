@@ -34,7 +34,12 @@ export type MilestoneAction =
   | "milestone.accept"
   | "milestone.complete"
   | "milestone.reopen"
-  | "milestone.revise";
+  | "milestone.revise"
+  | "source.attach"
+  | "source.remove"
+  | "source.replace"
+  | "source.change_role"
+  | "source.update";
 
 export type MilestoneActionSubject =
   | { readonly type: "milestone" }
@@ -44,6 +49,7 @@ export type MilestoneActionSubject =
   | { readonly type: "challenge_evidence"; readonly challengeId: ChallengeId; readonly challengeEvidenceId?: ChallengeEvidenceId }
   | { readonly type: "challenge_target"; readonly target: ChallengeTarget }
   | { readonly type: "review"; readonly reviewId: ReviewId }
+  | { readonly type: "source"; readonly subject: { readonly type: import("../model/domain.js").MilestoneSourceSubjectType; readonly id: string }; readonly linkId?: import("@elqora/artifacts").ArtifactLinkId }
   | { readonly type: "approval_stage"; readonly approvalStageId: ApprovalStageId; readonly authorityRef?: string }
   | { readonly type: "approval_record"; readonly approvalRecordId: ApprovalRecordId; readonly approvalStageId: ApprovalStageId; readonly authorityRef?: string };
 

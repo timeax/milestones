@@ -48,9 +48,11 @@ import type { DraftMilestone } from "./internal/draft.js";
 import type { EditorSession } from "./internal/session.js";
 import { createReviewEditor, ReviewEditor } from "./review-editor.js";
 import { createRevisionEditor, RevisionEditor } from "./revision-editor.js";
+import { createSourceEditor, MilestoneSourceEditor } from "./source-editor.js";
 
 export class MilestoneEditor {
   public readonly definition: DefinitionEditor;
+  public readonly sources: MilestoneSourceEditor;
   public readonly criteria: CriteriaEditor;
   public readonly deliverables: DeliverableEditor;
   public readonly dependencies: DependencyEditor;
@@ -100,6 +102,7 @@ export class MilestoneEditor {
     initializeHistory(this.session);
     this.history = new MilestoneEditorHistoryController(this.session);
     this.definition = historyAwareCommands(this.session, createDefinitionEditor(this.session));
+    this.sources = historyAwareCommands(this.session, createSourceEditor(this.session));
     this.criteria = historyAwareCommands(this.session, createCriteriaEditor(this.session));
     this.deliverables = historyAwareCommands(this.session, createDeliverableEditor(this.session));
     this.dependencies = historyAwareCommands(this.session, createDependencyEditor(this.session));
@@ -126,10 +129,10 @@ export class MilestoneEditor {
     const revisionId = options.ids.revision();
     const createdAt = options.clock.now();
     const criteria = (input.criteria ?? []).map(
-      (item) => ({ id: options.ids.criterion(), ...clone(item) }),
+      (item) => ({ id: options.ids.criterion(), ...clone(item), sourceLinks: [] }),
     );
     const deliverables = (input.deliverables ?? []).map(
-      (item) => ({ id: options.ids.deliverableRequirement(), ...clone(item) }),
+      (item) => ({ id: options.ids.deliverableRequirement(), ...clone(item), sourceLinks: [] }),
     );
     const dependencies = (input.dependencies ?? []).map(
       (item) => ({ id: options.ids.dependency(), milestoneId, ...clone(item) }),
@@ -147,6 +150,7 @@ export class MilestoneEditor {
       number: 1,
       ...(input.actor === undefined ? {} : { actor: input.actor }),
       createdAt,
+      sourceLinks: [],
       snapshot: {
         profile: clone(input.profile.ref),
         evaluationPolicy: defaultEvaluationPolicy(input.profile),
@@ -154,6 +158,7 @@ export class MilestoneEditor {
         criteria: criteria.map(({ state: _state, ...item }) => item),
         deliverables: deliverables.map(({ state: _state, ...item }) => item),
         dependencies: clone(dependencies),
+        sources: [],
         ...(approvalPolicy === undefined ? {} : { approvalPolicy: clone(approvalPolicy) }),
       },
     };
@@ -163,6 +168,7 @@ export class MilestoneEditor {
       currentRevisionId: revisionId,
       revisions: [revision],
       definition: clone(input.definition),
+      sourceLinks: [],
       criteria,
       deliverables,
       dependencies,

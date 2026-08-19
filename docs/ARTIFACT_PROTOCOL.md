@@ -6,7 +6,7 @@ package compatibility `>=0.2.0 <0.3.0` with Artifact Protocol compatibility
 `@elqora/artifacts` 0.2.0 TypeScript project; packed consumer checks install the
 published npm package.
 
-Milestones own only requirement references, milestone-specific link roles and
+Milestones own only Source and requirement references, milestone-specific link roles and
 subjects, explicit evaluation context, acceptance evidence snapshots, and the
 milestone lifecycle consequence of invalidation. Artifact identity, versions,
 submissions, verification, provenance, providers, storage, and persistence stay
@@ -24,3 +24,8 @@ and verification IDs. They never follow later versions. Because the SDK has no
 artifact store or event subscription, a host that detects later invalidation
 reopens with cause `{ type: "artifact_invalidation", ref }`; the SDK clears
 current pointers and preserves the historical acceptance/completion facts.
+
+Sources use the same Artifact Link contract with bounded milestone roles
+`reference`, `context`, `specification`, and `decision`. Specification and decision
+links pin an Artifact Version; source relationships are context and never become
+evidence, deliverables, requirements, or acceptance gates by implication.

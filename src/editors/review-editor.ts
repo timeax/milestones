@@ -10,6 +10,7 @@ import { emit } from "./internal/events.js";
 import { authorize, clone, ensureOpen, feature } from "./internal/helpers.js";
 import type { Mutable } from "./internal/draft.js";
 import type { EditorSession } from "./internal/session.js";
+import { resolveSources } from "../services/sources.js";
 
 export class ReviewEditor {
   private readonly session: EditorSession;
@@ -33,6 +34,7 @@ export class ReviewEditor {
         ? {}
         : { assignedReviewer: options.assignedReviewer }),
       state: "requested",
+      sourceLinks: [],
       createdAt: this.session.clock.now(),
     };
     this.session.draft.reviews.push(clone(review));
@@ -81,6 +83,7 @@ export class ReviewEditor {
     review.state = "completed";
     review.result = result;
     review.completedAt = this.session.clock.now();
+    review.sourceSnapshot = resolveSources(review.sourceLinks ?? [], this.session.artifacts);
     if (options.completedBy !== undefined) review.completedBy = options.completedBy;
     if (options.summary !== undefined) review.summary = options.summary;
     if (options.artifactVersionIds !== undefined) {

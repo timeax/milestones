@@ -12,6 +12,7 @@ import { emit } from "./internal/events.js";
 import { authorize, clone, ensureOpen, feature, requiredText } from "./internal/helpers.js";
 import type { Mutable } from "./internal/draft.js";
 import { applyReopen } from "./internal/revision.js";
+import { resolveSources } from "../services/sources.js";
 import type { EditorSession } from "./internal/session.js";
 
 export class ChallengeEditor {
@@ -42,6 +43,7 @@ export class ChallengeEditor {
       severity,
       state: "open" as const,
       evidence: [],
+      sourceLinks: [],
       ...(raisedBy === undefined ? {} : { raisedBy }),
       createdAt: this.session.clock.now(),
     };
@@ -70,6 +72,7 @@ export class ChallengeEditor {
       ...(options.summary === undefined ? {} : { summary: options.summary }),
       ...(options.actor === undefined ? {} : { resolvedBy: options.actor }),
       resolvedAt: this.session.clock.now(),
+      sourceSnapshot: resolveSources(challenge.sourceLinks ?? [], this.session.artifacts),
     };
     challenge.state = "resolved";
     challenge.resolution = resolution;

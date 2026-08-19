@@ -2,16 +2,16 @@ const expectedRoot = [
   "ARTIFACT_PACKAGE_COMPATIBILITY", "ARTIFACT_PROTOCOL_COMPATIBILITY", "ARTIFACT_PROTOCOL_VERSION",
   "ApprovalEditor", "ChallengeEditor", "CriteriaEditor", "DEFAULT_EDITOR_HISTORY_LIMIT", "EvidenceEditor",
   "DefinitionEditor", "DeliverableEditor", "DependencyEditor", "FixedMilestoneClock",
-  "MAX_EDITOR_HISTORY_LIMIT", "MILESTONE_PROTOCOL_VERSION", "MilestoneDomainError", "MilestoneEditor", "MilestoneValidationError", "migrateAndDeserializeMilestone", "migrateMilestoneWire",
+  "MAX_EDITOR_HISTORY_LIMIT", "MILESTONE_PROTOCOL_VERSION", "MilestoneDomainError", "MilestoneEditor", "MilestoneSourceEditor", "MilestoneValidationError", "SourceEditor", "migrateAndDeserializeMilestone", "migrateMilestoneWire",
   "ReviewEditor", "RevisionEditor", "SequenceMilestoneIdGenerator", "SystemMilestoneClock",
   "asAcceptanceId", "asApprovalRecordId", "asApprovalStageId", "asChallengeEvidenceId", "asChallengeId", "asCompletionId",
   "affectedMilestoneIds", "asCriterionId", "asDeliverableRequirementId", "asDependencyId", "asMilestoneEventId", "asMilestoneId",
-  "asMilestoneProfileId", "asMilestoneRevisionId", "asReviewId", "assertValidGraph", "blockedMilestoneIds",
+  "asMilestoneProfileId", "asMilestoneRevisionId", "asReviewId", "assertValidGraph", "assertValidSourceLink", "blockedMilestoneIds",
   "assertValidMilestone", "calculateProgress", "createGraphSnapshot", "defaultEvaluationPolicy",
   "deriveMilestoneState", "deserializeArtifactContext", "deserializeEvents", "deserializeGraph", "deserializeMilestoneJson", "evaluateGraph",
   "deserializeMilestone", "detectCycles", "downstreamImpact", "evaluateAcceptance", "evaluateArtifacts",
-  "evaluateCompletion", "evaluateDependency", "findUnlockedMilestoneIds", "resolveChallengeEvidenceSources", "serializeArtifactContext",
-  "readyMilestoneIds", "serializeEvents", "serializeGraph", "serializeMilestone", "serializeMilestoneJson", "validateGraph", "validateMilestone",
+  "evaluateCompletion", "evaluateDependency", "findUnlockedMilestoneIds", "isDefinitionBearing", "resolveChallengeEvidenceSources", "resolveSourceLink", "resolveSources", "serializeArtifactContext",
+  "readyMilestoneIds", "serializeEvents", "serializeGraph", "serializeMilestone", "serializeMilestoneJson", "sourceLinksForRevision", "validateGraph", "validateMilestone",
 ].sort();
 
 const pkg = await import("../dist/index.js");

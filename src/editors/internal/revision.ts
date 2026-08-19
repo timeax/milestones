@@ -7,6 +7,7 @@ import type {
 } from "../../model/domain.js";
 import { invariant } from "../../model/errors.js";
 import { defaultEvaluationPolicy } from "../../services/evaluation.js";
+import { resolveSources, sourceLinksForRevision } from "../../services/sources.js";
 import { emit } from "./events.js";
 import { authorize, clone, ensureOpen, feature, requiredText } from "./helpers.js";
 import type { EditorSession } from "./session.js";
@@ -19,6 +20,7 @@ export function createRevisionSnapshot(session: EditorSession): MilestoneRevisio
     criteria: session.draft.criteria.map(({ state: _state, ...definition }) => clone(definition)),
     deliverables: session.draft.deliverables.map(({ state: _state, ...definition }) => clone(definition)),
     dependencies: clone(session.draft.dependencies),
+    sources: resolveSources(sourceLinksForRevision(session.draft, session.draft.currentRevisionId), session.artifacts),
     ...(session.draft.approvalPolicy === undefined
       ? {}
       : { approvalPolicy: clone(session.draft.approvalPolicy) }),
@@ -30,11 +32,11 @@ export function beginMaterialRevision(
   reason = "Material milestone change",
   actor?: ActorRef,
   evaluationPolicy: MilestoneEvaluationPolicySnapshot = defaultEvaluationPolicy(session.profile),
-): void {
+): MilestoneRevision["id"] {
   ensureOpen(session);
   feature(session.profile.revisions.enabled, "revisions");
   authorize(session, "milestone.revise", actor, { type: "milestone" });
-  if (session.revision !== undefined) return;
+  if (session.revision !== undefined) return session.revision.id;
   const previousRevisionId = session.draft.currentRevisionId;
   const revision: MilestoneRevision = {
     id: session.ids.revision(),
@@ -44,6 +46,7 @@ export function beginMaterialRevision(
     reason,
     ...(actor === undefined ? {} : { actor }),
     createdAt: session.clock.now(),
+    sourceLinks: [],
     snapshot: { ...createRevisionSnapshot(session), evaluationPolicy },
   };
   session.draft.revisions.push(revision);
@@ -67,6 +70,7 @@ export function beginMaterialRevision(
   session.revision = revision;
   session.changes.push({ type: "revised", revisionId: revision.id });
   emit(session, "milestone.revised", { revisionId: revision.id, previousRevisionId, reason }, actor);
+  return revision.id;
 }
 
 export function applyReopen(session: EditorSession, request: ReopenRequest): void {

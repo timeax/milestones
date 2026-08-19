@@ -7,7 +7,7 @@ import {
   MilestoneEditor,
   asChallengeEvidenceId,
   resolveChallengeEvidenceSources,
-  deserializeMilestoneJson,
+  migrateAndDeserializeMilestone,
   type MilestoneArtifactContext,
   type MilestoneArtifactLink,
 } from "../src/index.js";
@@ -23,7 +23,7 @@ function sourceContext(evidenceId: string, role: "challenge_evidence" | "respons
 describe("first-class challenge evidence", () => {
   it("round-trips canonical Protocol 1.1 evidence states", async () => {
     const path = fileURLToPath(new URL("fixtures/milestone-evidence-v1.1.json", import.meta.url));
-    const milestone = deserializeMilestoneJson(await readFile(path, "utf8"));
+    const milestone = migrateAndDeserializeMilestone(JSON.parse(await readFile(path, "utf8")));
     expect(milestone.challenges[0]!.evidence.map((item) => item.state)).toEqual(["superseded", "withdrawn", "active"]);
   });
   it("is append-only, attributed, evented, and audit-only", () => {

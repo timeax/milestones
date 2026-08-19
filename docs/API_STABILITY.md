@@ -12,6 +12,8 @@ The following contracts follow semantic-versioning compatibility rules:
 - milestone profiles, lifecycle records, typed events, and typed errors;
 - `MilestoneEditor`, `MilestoneEditorOptions`, and the focused sub-editors
   obtained from an editor instance;
+- `MilestoneSourceEditor`, canonical source-link contracts, and source-resolution
+  helpers exported from the root API;
 - deterministic evaluation, dependency-graph, validation, and serialization
   entry points;
 - Artifact Protocol compatibility constants and canonical Artifact Protocol

@@ -3,6 +3,7 @@ import type { ValidationIssue } from "../../model/errors.js";
 import { addIssue, duplicates, nonEmpty, validateApprovalStages, validateCriteria, validateDeliverables, validateUniqueIds } from "./common.js";
 import { validateRevisions } from "./revisions.js";
 import { dependencyIdentityKey } from "../dependency-identity.js";
+import { assertValidSourceLink } from "../sources.js";
 
 function validateAcceptanceSnapshot(issues: ValidationIssue[], acceptance: MilestoneAcceptance, revision: MilestoneRevision, milestone: Milestone): void {
   const path = `acceptanceRecords.${acceptance.id}.snapshot`;
@@ -39,6 +40,7 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
 
   validateCriteria(issues, milestone.criteria, "criteria");
   validateDeliverables(issues, milestone.deliverables, "deliverables");
+  validateSources(issues, milestone);
   validateUniqueIds(issues, milestone.dependencies, "dependencies");
   const dependencyKeys = new Set<string>();
   for (const dependency of milestone.dependencies) {
@@ -120,6 +122,23 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
 
   if (profile !== undefined) validateProfileState(issues, milestone, profile, stages.length);
   return issues;
+}
+
+function validateSources(issues: ValidationIssue[], milestone: Milestone): void {
+  const seen = new Set<string>();
+  const entries: readonly (readonly [string, readonly import("../../model/domain.js").MilestoneSourceLink[] | undefined, string, string])[] = [
+    ["sourceLinks", milestone.sourceLinks, "milestone", milestone.id],
+    ...milestone.revisions.map((item) => [`revisions.${item.id}.sourceLinks`, item.sourceLinks, "milestone_revision", item.id] as const),
+    ...milestone.criteria.map((item) => [`criteria.${item.id}.sourceLinks`, item.sourceLinks, "criterion", item.id] as const),
+    ...milestone.deliverables.map((item) => [`deliverables.${item.id}.sourceLinks`, item.sourceLinks, "deliverable_requirement", item.id] as const),
+    ...milestone.challenges.map((item) => [`challenges.${item.id}.sourceLinks`, item.sourceLinks, "challenge", item.id] as const),
+    ...milestone.reviews.map((item) => [`reviews.${item.id}.sourceLinks`, item.sourceLinks, "review", item.id] as const),
+  ];
+  for (const [path, links, type, id] of entries) for (const link of links ?? []) {
+    try { assertValidSourceLink(link); } catch (error) { addIssue(issues, "invalid_source_link", `${path}.${link.id}`, error instanceof Error ? error.message : "Invalid Source link"); }
+    if (link.subject.type !== type || link.subject.id !== id) addIssue(issues, "source_ownership_mismatch", `${path}.${link.id}`, "Source link subject does not match its owner");
+    if (seen.has(link.id)) addIssue(issues, "duplicate_source_link", path, `Duplicate Source link ${link.id}`); seen.add(link.id);
+  }
 }
 
 function validateChallengeEvidence(
