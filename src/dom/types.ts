@@ -3,6 +3,8 @@ import type {
   ArtifactLinkId,
   ArtifactMetadata,
   ArtifactRequirementId,
+  ArtifactSubmissionId,
+  ArtifactVerificationId,
   ArtifactVersionId,
 } from "@elqora/artifacts";
 
@@ -13,9 +15,12 @@ import type {
   ApprovalStageId,
   ChallengeEvidenceId,
   ChallengeEvidenceKind,
+  ChallengeEvidenceSourceIssueCode,
   ChallengeEvidenceState,
   ChallengeId,
+  ChallengeResolutionOutcome,
   ChallengeState,
+  ChallengeTarget,
   CompletionId,
   CriterionId,
   CriterionState,
@@ -471,38 +476,150 @@ export interface MilestoneReadinessDocument {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                          Historical Source snapshots                       */
+/* -------------------------------------------------------------------------- */
+
+export interface MilestoneSourceSnapshotDocument {
+  getLinkId(): ArtifactLinkId;
+
+  getArtifactId(): ArtifactId;
+
+  getArtifactVersionId(): ArtifactVersionId | undefined;
+
+  getSubjectType(): MilestoneSourceSubjectType;
+
+  getSubjectId(): string;
+
+  getRole(): MilestoneSourceRole;
+
+  getNote(): TextDocument;
+
+  hasNote(): boolean;
+
+  getMetadata(): ArtifactMetadata | undefined;
+
+  isPinned(): boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                             Challenge target                               */
+/* -------------------------------------------------------------------------- */
+
+export interface ChallengeTargetDocument {
+  getType(): ChallengeTarget["type"];
+
+  getCriterionId(): CriterionId | undefined;
+
+  getDeliverableRequirementId():
+    | DeliverableRequirementId
+    | undefined;
+
+  getReviewId(): ReviewId | undefined;
+
+  getArtifactId(): ArtifactId | undefined;
+
+  getArtifactVersionId():
+    | ArtifactVersionId
+    | undefined;
+
+  getReference(): string | undefined;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                         Challenge evidence Sources                         */
+/* -------------------------------------------------------------------------- */
+
+export interface ChallengeEvidenceSourceDocument {
+  getLinkId(): ArtifactLinkId;
+
+  getRole():
+    | "challenge_evidence"
+    | "response_evidence";
+
+  getArtifactId(): ArtifactId;
+
+  getArtifactVersionId(): ArtifactVersionId;
+}
+
+export interface ChallengeEvidenceSourceIssueDocument {
+  getCode(): ChallengeEvidenceSourceIssueCode;
+
+  getLinkId(): ArtifactLinkId;
+
+  getMessage(): string;
+}
+
+export interface ChallengeEvidenceSourcesDocument {
+  getStatus():
+    | "pending"
+    | "resolved"
+    | "invalid";
+
+  isPending(): boolean;
+
+  isResolved(): boolean;
+
+  isInvalid(): boolean;
+
+  getCount(): number;
+
+  list(): readonly ChallengeEvidenceSourceDocument[];
+
+  getIssues():
+    readonly ChallengeEvidenceSourceIssueDocument[];
+}
+
+/* -------------------------------------------------------------------------- */
 /*                              Challenge evidence                            */
 /* -------------------------------------------------------------------------- */
 
 export interface ChallengeEvidenceOverviewDocument {
   getId(): ChallengeEvidenceId;
+
   getKind(): ChallengeEvidenceKind;
+
   getTitle(): string;
+
   getState(): ChallengeEvidenceState;
+
   getDescription(): TextDocument;
 }
 
 export interface ChallengeEvidenceDocument {
   getId(): ChallengeEvidenceId;
+
   getOverview(): ChallengeEvidenceOverviewDocument;
+
   getKind(): ChallengeEvidenceKind;
+
   getTitle(): string;
+
   getDescription(): TextDocument;
+
   getState(): ChallengeEvidenceState;
-  getSupersedesEvidenceId(): ChallengeEvidenceId | undefined;
+
+  getSupersedesEvidenceId():
+    | ChallengeEvidenceId
+    | undefined;
+
   getCreatedBy(): ActorRef | undefined;
+
   getCreatedAt(): string;
+
   getWithdrawnBy(): ActorRef | undefined;
+
   getWithdrawnAt(): string | undefined;
+
   getWithdrawalReason(): TextDocument;
+
   isWithdrawn(): boolean;
 
   /**
-   * Artifact links that provide the canonical evidence payload are resolved
-   * through the milestone artifact context rather than embedded into the
-   * ChallengeEvidence domain record.
+   * Canonical Artifact-backed evidence Sources.
+   *
+   * These are NOT MilestoneSourceLinks.
    */
-  getSourceLinkIds(): readonly ArtifactLinkId[];
+  getSources(): ChallengeEvidenceSourcesDocument;
 }
 
 export interface ChallengeEvidenceCollectionDocument
@@ -512,7 +629,9 @@ export interface ChallengeEvidenceCollectionDocument
     ChallengeEvidenceDocument
   > {
   getActive(): readonly ChallengeEvidenceDocument[];
+
   getSupporting(): readonly ChallengeEvidenceDocument[];
+
   getResponses(): readonly ChallengeEvidenceDocument[];
 }
 
@@ -522,39 +641,80 @@ export interface ChallengeEvidenceCollectionDocument
 
 export interface ChallengeOverviewDocument {
   getId(): ChallengeId;
+
   getRevisionId(): MilestoneRevisionId;
+
+  getTarget(): ChallengeTargetDocument;
+
   getState(): ChallengeState;
+
   getSeverity(): "non_blocking" | "blocking";
+
   getReason(): TextDocument;
+
+  /**
+   * Current semantic blocking state, not merely severity.
+   */
   isBlocking(): boolean;
+
   isOpen(): boolean;
+
+  isCurrentRevision(): boolean;
 }
 
 export interface ChallengeResolutionDocument {
-  getOutcome():
-    | "no_effect"
-    | "target_invalidated"
-    | "acceptance_invalidated"
-    | "requirements_invalidated";
+  getOutcome(): ChallengeResolutionOutcome;
+
   getSummary(): TextDocument;
+
   getResolvedBy(): ActorRef | undefined;
+
   getResolvedAt(): string;
-  getSources(): MilestoneSourcesDocument;
+
+  /**
+   * Historical Sources captured with the resolution.
+   */
+  getSourceSnapshots():
+    readonly MilestoneSourceSnapshotDocument[];
 }
 
 export interface ChallengeDocument {
   getId(): ChallengeId;
+
   getOverview(): ChallengeOverviewDocument;
+
   getRevisionId(): MilestoneRevisionId;
+
+  getTarget(): ChallengeTargetDocument;
+
   getReason(): TextDocument;
+
   getState(): ChallengeState;
+
   getSeverity(): "non_blocking" | "blocking";
+
+  /**
+   * Whether this Challenge is actually blocking current acceptance.
+   */
   isBlocking(): boolean;
+
   isOpen(): boolean;
+
+  isCurrentRevision(): boolean;
+
   getRaisedBy(): ActorRef | undefined;
+
   getCreatedAt(): string;
-  getResolution(): ChallengeResolutionDocument | undefined;
+
+  getResolution():
+    | ChallengeResolutionDocument
+    | undefined;
+
   getEvidence(): ChallengeEvidenceCollectionDocument;
+
+  /**
+   * Ordinary Milestone Sources attached to the Challenge itself.
+   */
   getSources(): MilestoneSourcesDocument;
 }
 
@@ -565,9 +725,24 @@ export interface ChallengesDocument
     ChallengeDocument
   > {
   getOpen(): readonly ChallengeDocument[];
+
+  /**
+   * Challenges actually blocking current acceptance.
+   */
   getBlocking(): readonly ChallengeDocument[];
+
   getResolved(): readonly ChallengeDocument[];
-  getByState(state: ChallengeState): readonly ChallengeDocument[];
+
+  getByState(
+    state: ChallengeState,
+  ): readonly ChallengeDocument[];
+
+  getForRevision(
+    revisionId: MilestoneRevisionId,
+  ): readonly ChallengeDocument[];
+
+  getCurrentRevision():
+    readonly ChallengeDocument[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -576,40 +751,110 @@ export interface ChallengesDocument
 
 export interface ReviewOverviewDocument {
   getId(): ReviewId;
+
   getRevisionId(): MilestoneRevisionId;
+
   getState(): ReviewState;
+
   getResult(): ReviewResult | undefined;
+
   getSummary(): TextDocument;
+
   isCompleted(): boolean;
+
+  /**
+   * Whether the Review itself concluded successfully.
+   *
+   * This does not imply that it belongs to the current revision.
+   */
   isAccepted(): boolean;
+
+  isCurrentRevision(): boolean;
+
+  /**
+   * Whether this Review currently satisfies the milestone's review
+   * requirement for acceptance.
+   */
+  satisfiesCurrentAcceptance(): boolean;
 }
 
 export interface ReviewDocument {
   getId(): ReviewId;
+
   getOverview(): ReviewOverviewDocument;
+
   getRevisionId(): MilestoneRevisionId;
+
   getState(): ReviewState;
+
   getResult(): ReviewResult | undefined;
+
   getSummary(): TextDocument;
+
   getRequestedBy(): ActorRef | undefined;
+
   getAssignedReviewer(): ActorRef | undefined;
+
   getCompletedBy(): ActorRef | undefined;
+
   getCreatedAt(): string;
+
   getCompletedAt(): string | undefined;
+
   getArtifactVersionIds(): readonly ArtifactVersionId[];
+
+  /**
+   * Current/live Sources attached directly to the Review.
+   */
   getSources(): MilestoneSourcesDocument;
+
+  /**
+   * Historical Source state captured by the Review.
+   */
+  getSourceSnapshots():
+    readonly MilestoneSourceSnapshotDocument[];
+
   isCompleted(): boolean;
+
   isAccepted(): boolean;
+
+  isCurrentRevision(): boolean;
+
+  satisfiesCurrentAcceptance(): boolean;
 }
 
 export interface ReviewsDocument
-  extends DocumentCollection<ReviewId, ReviewOverviewDocument, ReviewDocument> {
+  extends DocumentCollection<
+    ReviewId,
+    ReviewOverviewDocument,
+    ReviewDocument
+  > {
   getPending(): readonly ReviewDocument[];
+
   getCompleted(): readonly ReviewDocument[];
+
   getAccepted(): readonly ReviewDocument[];
+
   getChangesRequested(): readonly ReviewDocument[];
+
   getRejected(): readonly ReviewDocument[];
-  getByState(state: ReviewState): readonly ReviewDocument[];
+
+  getByState(
+    state: ReviewState,
+  ): readonly ReviewDocument[];
+
+  getForRevision(
+    revisionId: MilestoneRevisionId,
+  ): readonly ReviewDocument[];
+
+  getCurrentRevision(): readonly ReviewDocument[];
+
+  /**
+   * Current-revision Reviews that actually satisfy the acceptance
+   * review requirement.
+   */
+  getSatisfyingCurrentAcceptance():
+    readonly ReviewDocument[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -693,6 +938,19 @@ export interface ApprovalsDocument {
 /*                                  Revisions                                 */
 /* -------------------------------------------------------------------------- */
 
+export interface MilestoneEvaluationPolicyDocument {
+  requiredCriteriaMustBeVerified(): boolean;
+  requiredDeliverablesMustBeSatisfied(): boolean;
+  waivedCriteriaSatisfyRequired(): boolean;
+  waivedDeliverablesSatisfyRequired(): boolean;
+  blockingChallengesPreventAcceptance(): boolean;
+  getRequiredReviewResult(): "accepted";
+  requireReviewWhenProfileRequires(): boolean;
+  requireApprovalsWhenProfileRequires(): boolean;
+  completionRequiresCurrentAcceptance(): boolean;
+  closeImmediatelyOnAcceptance(): boolean;
+}
+
 export interface CriterionDefinitionDocument {
   getId(): CriterionId;
   getTitle(): string;
@@ -700,7 +958,11 @@ export interface CriterionDefinitionDocument {
   isRequired(): boolean;
   getWeight(): number;
   getArtifactRequirementIds(): readonly ArtifactRequirementId[];
-  getSources(): MilestoneSourcesDocument;
+
+  /**
+   * Historical, resolved Source snapshots belonging to this Criterion.
+   */
+  getSources(): readonly MilestoneSourceSnapshotDocument[];
 }
 
 export interface DeliverableDefinitionDocument {
@@ -709,129 +971,440 @@ export interface DeliverableDefinitionDocument {
   getDescription(): TextDocument;
   isRequired(): boolean;
   getArtifactRequirementIds(): readonly ArtifactRequirementId[];
-  getSources(): MilestoneSourcesDocument;
+
+  getSources(): readonly MilestoneSourceSnapshotDocument[];
+}
+
+export interface DependencyDefinitionDocument {
+  getId(): DependencyId;
+  getMilestoneId(): MilestoneId;
+  getDependsOnMilestoneId(): MilestoneId;
+  getGate(): MilestoneDependencyGate;
+  isBlocking(): boolean;
+}
+
+export interface ApprovalStageDefinitionDocument {
+  getId(): ApprovalStageId;
+  getLabel(): string;
+  isRequired(): boolean;
+  getOrder(): number | undefined;
+  getRequiredApprovalCount(): number;
+  getScope(): "milestone" | "criteria" | "deliverables";
+  getCriterionIds(): readonly CriterionId[];
+  getDeliverableRequirementIds():
+    readonly DeliverableRequirementId[];
+  getAuthorityRef(): string | undefined;
+}
+
+export interface ApprovalPolicySnapshotDocument {
+  hasPolicy(): boolean;
+
+  getStages():
+    readonly ApprovalStageDefinitionDocument[];
+
+  getStage(
+    id: ApprovalStageId,
+  ): ApprovalStageDefinitionDocument | undefined;
+
+  requireStage(
+    id: ApprovalStageId,
+  ): ApprovalStageDefinitionDocument;
 }
 
 export interface MilestoneRevisionSnapshotDocument {
-  getProfile(): MilestoneProfileDocument;
-  getDefinition(): MilestoneDefinitionDocument;
-  getCriteria(): readonly CriterionDefinitionDocument[];
-  getDeliverables(): readonly DeliverableDefinitionDocument[];
-  getDependencies(): readonly DependencyDocument[];
-  getSources(): MilestoneSourcesDocument;
-  getApprovalStages(): ApprovalStagesDocument;
+  getProfileId(): MilestoneProfileId;
+  getProfileVersion(): number;
+
+  getEvaluationPolicy():
+    MilestoneEvaluationPolicyDocument;
+
+  getDefinition():
+    MilestoneDefinitionDocument;
+
+  getCriteria():
+    readonly CriterionDefinitionDocument[];
+
+  getCriterion(
+    id: CriterionId,
+  ): CriterionDefinitionDocument | undefined;
+
+  getDeliverables():
+    readonly DeliverableDefinitionDocument[];
+
+  getDeliverable(
+    id: DeliverableRequirementId,
+  ): DeliverableDefinitionDocument | undefined;
+
+  getDependencies():
+    readonly DependencyDefinitionDocument[];
+
+  /**
+   * Historical resolved Source state captured for this revision.
+   */
+  getSources():
+    readonly MilestoneSourceSnapshotDocument[];
+
+  getApprovalPolicy():
+    ApprovalPolicySnapshotDocument;
 }
 
-export interface MilestoneRevisionOverviewDocument {
+export interface RevisionOverviewDocument {
   getId(): MilestoneRevisionId;
+
   getNumber(): number;
-  getPreviousRevisionId(): MilestoneRevisionId | undefined;
+
+  getPreviousRevisionId():
+    | MilestoneRevisionId
+    | undefined;
+
   getReason(): TextDocument;
-  getActor(): ActorRef | undefined;
+
   getCreatedAt(): string;
+
   isCurrent(): boolean;
 }
 
-export interface MilestoneRevisionDocument {
+export interface RevisionDocument {
   getId(): MilestoneRevisionId;
-  getOverview(): MilestoneRevisionOverviewDocument;
+
+  getOverview(): RevisionOverviewDocument;
+
   getNumber(): number;
-  getPreviousRevisionId(): MilestoneRevisionId | undefined;
+
+  getPreviousRevisionId():
+    | MilestoneRevisionId
+    | undefined;
+
   getReason(): TextDocument;
+
   getActor(): ActorRef | undefined;
+
   getCreatedAt(): string;
-  getSources(): MilestoneSourcesDocument;
-  getSnapshot(): MilestoneRevisionSnapshotDocument;
+
   isCurrent(): boolean;
+
+  getSnapshot():
+    MilestoneRevisionSnapshotDocument;
+
+  /**
+   * Source links attached to the Revision aggregate itself.
+   *
+   * Distinct from snapshot.getSources(), which is historical resolved state.
+   */
+  getSources(): MilestoneSourcesDocument;
 }
 
-export interface MilestoneRevisionsDocument
+export interface RevisionsDocument
   extends DocumentCollection<
     MilestoneRevisionId,
-    MilestoneRevisionOverviewDocument,
-    MilestoneRevisionDocument
+    RevisionOverviewDocument,
+    RevisionDocument
   > {
-  getCurrent(): MilestoneRevisionDocument;
-  getLatest(): MilestoneRevisionDocument;
+  getCurrent(): RevisionDocument;
+
+  getPrevious(): RevisionDocument | undefined;
+
+  getByNumber(
+    number: number,
+  ): RevisionDocument | undefined;
+
+  getLatest(
+    count?: number,
+  ): readonly RevisionDocument[];
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                  Issues                                    */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Semantic evaluation issue.
- *
- * These correspond to the existing milestone evaluation reason vocabulary,
- * but are exposed as DOM nodes rather than raw evaluation records.
- */
+export type MilestoneIssueCategory =
+  | "criteria"
+  | "deliverables"
+  | "acceptance"
+  | "dependencies"
+  | "challenges"
+  | "reviews"
+  | "approvals"
+  | "artifacts"
+  | "profile";
+
 export interface MilestoneIssueDocument {
   getCode(): EvaluationReasonCode;
+
+  /**
+   * Domain subject that caused the evaluation issue.
+   *
+   * The exact subject type depends on the reason code.
+   */
   getSubjectId(): string;
+
   getMessage(): string;
+
+  getCategory(): MilestoneIssueCategory;
+
+  isArtifactRelated(): boolean;
 }
 
 export interface MilestoneIssuesDocument {
   getCount(): number;
+
   isEmpty(): boolean;
-  list(options?: DocumentListOptions): readonly MilestoneIssueDocument[];
-  hasCode(code: EvaluationReasonCode): boolean;
-  getByCode(code: EvaluationReasonCode): readonly MilestoneIssueDocument[];
-  getForSubject(subjectId: string): readonly MilestoneIssueDocument[];
+
+  list(
+    options?: DocumentListOptions,
+  ): readonly MilestoneIssueDocument[];
+
+  getByCode(
+    code: EvaluationReasonCode,
+  ): readonly MilestoneIssueDocument[];
+
+  getByCategory(
+    category: MilestoneIssueCategory,
+  ): readonly MilestoneIssueDocument[];
+
+  getBySubjectId(
+    subjectId: string,
+  ): readonly MilestoneIssueDocument[];
+
+  hasCode(
+    code: EvaluationReasonCode,
+  ): boolean;
+
+  hasCategory(
+    category: MilestoneIssueCategory,
+  ): boolean;
+
+  getArtifactIssues():
+    readonly MilestoneIssueDocument[];
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                 Acceptance                                 */
 /* -------------------------------------------------------------------------- */
 
-export interface MilestoneAcceptanceOverviewDocument {
-  getId(): AcceptanceId;
+export interface CriterionAcceptanceSnapshotDocument {
+  getId(): CriterionId;
+  getState(): CriterionState;
+  isSatisfied(): boolean;
+}
+
+export interface DeliverableAcceptanceSnapshotDocument {
+  getId(): DeliverableRequirementId;
+  getState(): DeliverableRequirementState;
+  isSatisfied(): boolean;
+}
+
+export interface DependencyAcceptanceSnapshotDocument {
+  getId(): DependencyId;
+  getDependsOnMilestoneId(): MilestoneId;
+
+  getDependsOnRevisionId():
+    | MilestoneRevisionId
+    | undefined;
+
+  getGate(): MilestoneDependencyGate;
+
+  isBlocking(): boolean;
+  isSatisfied(): boolean;
+}
+
+export interface ChallengeEvidenceAcceptanceSnapshotDocument {
+  getId(): ChallengeEvidenceId;
+
+  getKind(): ChallengeEvidenceKind;
+
+  getTitle(): string;
+
+  getDescription(): TextDocument;
+
+  getState(): ChallengeEvidenceState;
+
+  getSupersedesEvidenceId():
+    | ChallengeEvidenceId
+    | undefined;
+
+  getSourceStatus():
+    | "pending"
+    | "resolved"
+    | "invalid";
+
+  getSources():
+    readonly ChallengeEvidenceSourceDocument[];
+}
+
+export interface ChallengeAcceptanceSnapshotDocument {
+  getId(): ChallengeId;
+
+  getTarget(): ChallengeTargetDocument;
+
+  getSeverity():
+    | "non_blocking"
+    | "blocking";
+
+  getState(): ChallengeState;
+
+  isBlocking(): boolean;
+
+  getResolution():
+    | ChallengeResolutionDocument
+    | undefined;
+
+  getEvidence():
+    readonly ChallengeEvidenceAcceptanceSnapshotDocument[];
+}
+
+export interface ReviewAcceptanceSnapshotDocument {
+  getId(): ReviewId;
+
   getRevisionId(): MilestoneRevisionId;
-  getAcceptedAt(): string;
-  getActor(): ActorRef | undefined;
-  isCurrent(): boolean;
+
+  getState(): ReviewState;
+
+  getResult(): ReviewResult | undefined;
+
+  getArtifactVersionIds():
+    readonly ArtifactVersionId[];
+
+  isSatisfied(): boolean;
+}
+
+export interface ApprovalAcceptanceSnapshotDocument {
+  getStageId(): ApprovalStageId;
+
+  getRevisionId(): MilestoneRevisionId;
+
+  getEffectiveApprovalCount(): number;
+
+  getRequiredApprovalCount(): number;
+
+  isSatisfied(): boolean;
+
+  isWaived(): boolean;
+
+  getActorIds(): readonly string[];
+}
+
+export interface ArtifactAcceptanceSnapshotDocument {
+  getArtifactRequirementId(): ArtifactRequirementId;
+
+  getArtifactId(): ArtifactId;
+
+  getArtifactVersionId():
+    | ArtifactVersionId
+    | undefined;
+
+  getSubmissionId():
+    | ArtifactSubmissionId
+    | undefined;
+
+  getVerificationId():
+    | ArtifactVerificationId
+    | undefined;
+
+  getOutcome():
+    | "satisfied"
+    | "failed"
+    | "waived";
 }
 
 export interface MilestoneAcceptanceSnapshotDocument {
   getRevisionId(): MilestoneRevisionId;
-  getSatisfiedCriterionCount(): number;
-  getCriterionCount(): number;
-  getSatisfiedDeliverableCount(): number;
-  getDeliverableCount(): number;
-  getBlockingChallengeCount(): number;
-  getSatisfiedReviewCount(): number;
-  getReviewCount(): number;
-  getSatisfiedApprovalCount(): number;
-  getApprovalCount(): number;
-  getSources(): MilestoneSourcesDocument;
+
+  getCriteria():
+    readonly CriterionAcceptanceSnapshotDocument[];
+
+  getDeliverables():
+    readonly DeliverableAcceptanceSnapshotDocument[];
+
+  getDependencies():
+    readonly DependencyAcceptanceSnapshotDocument[];
+
+  getChallenges():
+    readonly ChallengeAcceptanceSnapshotDocument[];
+
+  getReviews():
+    readonly ReviewAcceptanceSnapshotDocument[];
+
+  getApprovals():
+    readonly ApprovalAcceptanceSnapshotDocument[];
+
+  getArtifacts():
+    readonly ArtifactAcceptanceSnapshotDocument[];
+
+  /**
+   * Historical/resolved Source state captured by evaluation/acceptance.
+   */
+  getSources():
+    readonly MilestoneSourceSnapshotDocument[];
 }
 
-export interface MilestoneAcceptanceDocument {
+export interface AcceptanceOverviewDocument {
   getId(): AcceptanceId;
-  getOverview(): MilestoneAcceptanceOverviewDocument;
+
   getRevisionId(): MilestoneRevisionId;
+
   getAcceptedAt(): string;
-  getActor(): ActorRef | undefined;
-  getSnapshot(): MilestoneAcceptanceSnapshotDocument;
+
   isCurrent(): boolean;
 }
 
-export interface MilestoneAcceptancesDocument
-  extends DocumentCollection<
-    AcceptanceId,
-    MilestoneAcceptanceOverviewDocument,
-    MilestoneAcceptanceDocument
-  > {
-  getCurrent(): MilestoneAcceptanceDocument | undefined;
-  hasCurrent(): boolean;
+export interface AcceptanceDocument {
+  getId(): AcceptanceId;
+
+  getOverview(): AcceptanceOverviewDocument;
+
+  getRevisionId(): MilestoneRevisionId;
+
+  getAcceptedAt(): string;
+
+  getActor(): ActorRef | undefined;
+
+  isCurrent(): boolean;
+
+  getSnapshot():
+    MilestoneAcceptanceSnapshotDocument;
 }
 
-/**
- * Evaluation of whether a new/current acceptance may be created.
- */
-export interface MilestoneAcceptanceStatusDocument {
+export interface AcceptanceHistoryDocument
+  extends DocumentCollection<
+    AcceptanceId,
+    AcceptanceOverviewDocument,
+    AcceptanceDocument
+  > {
+  getForRevision(
+    revisionId: MilestoneRevisionId,
+  ): readonly AcceptanceDocument[];
+
+  getLatest(): AcceptanceDocument | undefined;
+}
+
+export interface AcceptanceStatusDocument {
+  /**
+   * Whether the milestone ALREADY has a current Acceptance record.
+   */
+  isAccepted(): boolean;
+
+  /**
+   * Whether evaluateAcceptance() says an Acceptance could be created now.
+   */
   canAccept(): boolean;
+
   getIssues(): MilestoneIssuesDocument;
+
+  /**
+   * The fresh snapshot produced by current evaluation.
+   *
+   * This is not yet a historical Acceptance record unless the Editor actually
+   * creates an Acceptance.
+   */
+  getEvaluationSnapshot():
+    MilestoneAcceptanceSnapshotDocument;
+
+  getCurrent():
+    AcceptanceDocument | undefined;
+
+  getHistory():
+    AcceptanceHistoryDocument;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1023,21 +1596,21 @@ export interface MilestoneDocumentContract {
   /* Revisions                                                              */
   /* ---------------------------------------------------------------------- */
 
-  getRevisions(): MilestoneRevisionsDocument;
-  getCurrentRevision(): MilestoneRevisionDocument;
+  getRevisions(): RevisionsDocument;
+  getCurrentRevision(): RevisionDocument;
   getRevision(
     id: MilestoneRevisionId,
-  ): MilestoneRevisionDocument | undefined;
+  ): RevisionDocument | undefined;
 
   /* ---------------------------------------------------------------------- */
   /* Acceptance                                                             */
   /* ---------------------------------------------------------------------- */
 
-  getAcceptanceStatus(): MilestoneAcceptanceStatusDocument;
+  getAcceptanceStatus(): AcceptanceStatusDocument;
   canAccept(): boolean;
   getAcceptanceIssues(): MilestoneIssuesDocument;
-  getAcceptances(): MilestoneAcceptancesDocument;
-  getCurrentAcceptance(): MilestoneAcceptanceDocument | undefined;
+  getAcceptances(): AcceptanceHistoryDocument;
+  getCurrentAcceptance(): AcceptanceDocument | undefined;
 
   /* ---------------------------------------------------------------------- */
   /* Completion                                                             */

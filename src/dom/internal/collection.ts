@@ -70,6 +70,39 @@ export function normalizeNonNegativeInteger(
 }
 
 /**
+ * Builds an index by any key (string or number) while preserving the milestone package's normal
+ * duplicate-ID error behavior.
+ */
+export function indexByUniqueKey<
+    TKey,
+    TValue,
+>(
+    values: readonly TValue[],
+    getKey: (value: TValue) => TKey,
+    label: string,
+): ReadonlyMap<TKey, TValue> {
+    const map = new Map<TKey, TValue>();
+
+    for (const value of values) {
+        const key = getKey(value);
+
+        invariant(
+            !map.has(key),
+            "DUPLICATE_ID",
+            `Duplicate ${label} ${String(key)}`,
+            {
+                id: String(key),
+                kind: label,
+            },
+        );
+
+        map.set(key, value);
+    }
+
+    return map;
+}
+
+/**
  * Builds an ID index while preserving the milestone package's normal
  * duplicate-ID error behavior.
  */
@@ -81,25 +114,7 @@ export function indexById<
     getId: (value: TValue) => TId,
     label: string,
 ): ReadonlyMap<TId, TValue> {
-    const map = new Map<TId, TValue>();
-
-    for (const value of values) {
-        const id = getId(value);
-
-        invariant(
-            !map.has(id),
-            "DUPLICATE_ID",
-            `Duplicate ${label} ${id}`,
-            {
-                id,
-                kind: label,
-            },
-        );
-
-        map.set(id, value);
-    }
-
-    return map;
+    return indexByUniqueKey(values, getId, label);
 }
 
 /**

@@ -1,29 +1,103 @@
-import type {ArtifactLinkId, ArtifactMetadata, ArtifactVersionId,} from "@elqora/artifacts";
+import type {
+  ArtifactId,
+  ArtifactLinkId,
+  ArtifactMetadata,
+  ArtifactVersionId,
+} from "@elqora/artifacts";
 
 import type {
-    MilestoneArtifactContext,
-    MilestoneSourceLink,
-    MilestoneSourceRole,
-    MilestoneSourceSnapshot,
-    MilestoneSourceSubjectType,
+  MilestoneArtifactContext,
+  MilestoneSourceLink,
+  MilestoneSourceRole,
+  MilestoneSourceSnapshot,
+  MilestoneSourceSubjectType,
 } from "../../model/domain.js";
 
 import {
-    assertValidSourceLink,
-    isDefinitionBearing,
-    resolveSourceLink,
-    sourceSubjectOwnsLink,
+  assertValidSourceLink,
+  isDefinitionBearing,
+  resolveSourceLink,
+  sourceSubjectOwnsLink,
 } from "../../services/sources.js";
 
 import type {
-    DocumentListOptions,
-    MilestoneSourceDocument,
-    MilestoneSourceOverviewDocument,
-    MilestoneSourcesDocument,
-    TextDocument,
+  DocumentListOptions,
+  MilestoneSourceDocument,
+  MilestoneSourceOverviewDocument,
+  MilestoneSourceSnapshotDocument,
+  MilestoneSourcesDocument,
+  TextDocument,
 } from "../types.js";
 
-import {createTextDocument,} from "./text.js";
+import {
+  createTextDocument,
+} from "./text.js";
+
+/* -------------------------------------------------------------------------- */
+/*                     Historical Source snapshot DOM                         */
+/* -------------------------------------------------------------------------- */
+
+export class MilestoneSourceSnapshotDocumentImpl
+  implements MilestoneSourceSnapshotDocument
+{
+  readonly #snapshot: MilestoneSourceSnapshot;
+  readonly #note: TextDocument;
+
+  constructor(
+    snapshot: MilestoneSourceSnapshot,
+  ) {
+    this.#snapshot = snapshot;
+
+    this.#note = createTextDocument(
+      snapshot.note,
+    );
+  }
+
+  getLinkId(): ArtifactLinkId {
+    return this.#snapshot.linkId;
+  }
+
+  getArtifactId(): ArtifactId {
+    return this.#snapshot.artifactId;
+  }
+
+  getArtifactVersionId():
+    | ArtifactVersionId
+    | undefined {
+    return this.#snapshot.artifactVersionId;
+  }
+
+  getSubjectType() {
+    return this.#snapshot.subject.type;
+  }
+
+  getSubjectId(): string {
+    return this.#snapshot.subject.id;
+  }
+
+  getRole() {
+    return this.#snapshot.role;
+  }
+
+  getNote(): TextDocument {
+    return this.#note;
+  }
+
+  hasNote(): boolean {
+    return !this.#note.isEmpty();
+  }
+
+  getMetadata(): ArtifactMetadata | undefined {
+    return this.#snapshot.metadata;
+  }
+
+  isPinned(): boolean {
+    return (
+      this.#snapshot.artifactVersionId !==
+      undefined
+    );
+  }
+}
 
 /* -------------------------------------------------------------------------- */
 /*                              Source overview                               */
