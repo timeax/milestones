@@ -287,9 +287,10 @@ describe("Milestone DOM", () => {
     expect(snapshot?.getApprovals()).toBeDefined();
     expect(snapshot?.getArtifacts()).toBeDefined();
     expect(snapshot?.getSources()).toBeDefined();
-
     const evalSnapshot = acceptanceStatus.getEvaluationSnapshot();
     expect(evalSnapshot).toBeDefined();
+    expect(acceptanceStatus.getHistory().get("acc_missing" as any)).toBeUndefined();
+    expect(() => acceptanceStatus.getHistory().require("acc_missing" as any)).toThrowError(MilestoneDomainError);
   });
 
   it("Test F: Completion history", () => {
@@ -317,6 +318,8 @@ describe("Milestone DOM", () => {
     expect(history.getForRevision(completedMilestone.currentRevisionId)).toHaveLength(1);
     expect(history.getForAcceptance(completedMilestone.currentAcceptanceId!)).toHaveLength(1);
     expect(history.getLatest()).toBeDefined();
+    expect(history.get("comp_missing" as any)).toBeUndefined();
+    expect(() => history.require("comp_missing" as any)).toThrowError(MilestoneDomainError);
 
     const current = completionStatus.getCurrent();
     expect(current).toBeDefined();

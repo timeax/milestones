@@ -14,24 +14,48 @@ import type {
   ArtifactVersion,
   ArtifactVersionId,
 } from "@elqora/artifacts";
+import type {
+  AcceptanceId,
+  ApprovalRecordId,
+  ApprovalStageId,
+  ChallengeEvidenceId,
+  ChallengeId,
+  CompletionId,
+  CriterionId,
+  DeliverableRequirementId,
+  DependencyId,
+  MilestoneEventId,
+  MilestoneId,
+  MilestoneProfileId,
+  MilestoneRevisionId,
+  ReviewId,
+} from "./ids.js";
+import type {
+  ActorRef,
+  ApprovalStage,
+  ChallengeEvidenceKind,
+  ChallengeEvidenceState,
+  ChallengeResolutionOutcome,
+  ChallengeState,
+  CriterionState,
+  DeliverableRequirementState,
+  EvaluationInvalidation,
+  EvaluationReason,
+  ExecutionCriterion,
+  ExecutionDeliverableRequirement,
+  ExecutionSourceRole,
+  JsonValue,
+  ReopenEffect,
+  ReviewResult,
+  ReviewState,
+} from "./execution.js";
 
-export type Brand<T, B extends string> = T & { readonly __brand: B };
-export type MilestoneId = Brand<string, "MilestoneId">;
-export type MilestoneProfileId = Brand<string, "MilestoneProfileId">;
-export type MilestoneRevisionId = Brand<string, "MilestoneRevisionId">;
-export type CriterionId = Brand<string, "CriterionId">;
-export type DeliverableRequirementId = Brand<string, "DeliverableRequirementId">;
-export type DependencyId = Brand<string, "DependencyId">;
-export type ChallengeId = Brand<string, "ChallengeId">;
-export type ChallengeEvidenceId = Brand<string, "ChallengeEvidenceId">;
-export type ReviewId = Brand<string, "ReviewId">;
-export type ApprovalStageId = Brand<string, "ApprovalStageId">;
-export type ApprovalRecordId = Brand<string, "ApprovalRecordId">;
-export type AcceptanceId = Brand<string, "AcceptanceId">;
-export type CompletionId = Brand<string, "CompletionId">;
-export type MilestoneEventId = Brand<string, "MilestoneEventId">;
+export type { Brand } from "./ids.js";
+export * from "./ids.js";
+export * from "./execution.js";
+export * from "./task.js";
+export * from "./breakdown.js";
 
-export interface ActorRef { readonly id: string; readonly type?: string }
 export interface MilestoneClock { now(): string }
 export interface MilestoneIdGenerator {
   milestone(): MilestoneId;
@@ -69,29 +93,10 @@ export interface MilestoneDefinition {
   readonly metadata?: Readonly<Record<string, JsonValue>>;
 }
 
-export type CriterionState = "not_started" | "in_progress" | "submitted" | "verified" | "failed" | "waived";
-export interface Criterion {
-  readonly id: CriterionId;
-  readonly title: string;
-  readonly description?: string;
-  readonly required: boolean;
-  readonly weight?: number;
-  readonly state: CriterionState;
-  readonly artifactRequirementIds?: readonly ArtifactRequirementId[];
-  readonly sourceLinks?: readonly MilestoneSourceLink[];
-}
+export type Criterion = ExecutionCriterion<MilestoneSourceLink>;
 export type CriterionDefinitionSnapshot = Omit<Criterion, "state">;
 
-export type DeliverableRequirementState = "missing" | "submitted" | "satisfied" | "rejected" | "waived";
-export interface DeliverableRequirement {
-  readonly id: DeliverableRequirementId;
-  readonly title: string;
-  readonly description?: string;
-  readonly required: boolean;
-  readonly state: DeliverableRequirementState;
-  readonly artifactRequirementIds?: readonly ArtifactRequirementId[];
-  readonly sourceLinks?: readonly MilestoneSourceLink[];
-}
+export type DeliverableRequirement = ExecutionDeliverableRequirement<MilestoneSourceLink>;
 export type DeliverableDefinitionSnapshot = Omit<DeliverableRequirement, "state">;
 
 export type MilestoneDependencyGate =
@@ -99,6 +104,7 @@ export type MilestoneDependencyGate =
   | { readonly type: "completed" }
   | { readonly type: "criterion"; readonly criterionId: CriterionId; readonly requiredState: "verified" }
   | { readonly type: "deliverable"; readonly deliverableRequirementId: DeliverableRequirementId; readonly requiredState: "satisfied" };
+
 export interface MilestoneDependency {
   readonly id: DependencyId;
   readonly milestoneId: MilestoneId;
@@ -115,8 +121,7 @@ export type ChallengeTarget =
   | { readonly type: "review"; readonly reviewId: ReviewId }
   | { readonly type: "artifact"; readonly artifactId: ArtifactId; readonly artifactVersionId?: ArtifactVersionId }
   | { readonly type: "evidence"; readonly ref: string };
-export type ChallengeState = "open" | "under_review" | "resolved" | "rejected" | "withdrawn" | "reopened";
-export type ChallengeResolutionOutcome = "no_effect" | "target_invalidated" | "acceptance_invalidated" | "requirements_invalidated";
+
 export interface ChallengeResolution {
   readonly outcome: ChallengeResolutionOutcome;
   readonly summary?: string;
@@ -124,8 +129,7 @@ export interface ChallengeResolution {
   readonly resolvedAt: string;
   readonly sourceSnapshot?: readonly MilestoneSourceSnapshot[];
 }
-export type ChallengeEvidenceKind = "supporting" | "response";
-export type ChallengeEvidenceState = "active" | "superseded" | "withdrawn";
+
 export interface ChallengeEvidence {
   readonly id: ChallengeEvidenceId;
   readonly milestoneId: MilestoneId;
@@ -142,6 +146,7 @@ export interface ChallengeEvidence {
   readonly withdrawnAt?: string;
   readonly withdrawalReason?: string;
 }
+
 export interface MilestoneChallenge {
   readonly id: ChallengeId;
   readonly milestoneId: MilestoneId;
@@ -158,8 +163,6 @@ export interface MilestoneChallenge {
   readonly sourceLinks?: readonly MilestoneSourceLink[];
 }
 
-export type ReviewState = "requested" | "in_progress" | "completed" | "cancelled";
-export type ReviewResult = "accepted" | "changes_requested" | "rejected";
 export interface MilestoneReview {
   readonly id: ReviewId;
   readonly milestoneId: MilestoneId;
@@ -177,34 +180,60 @@ export interface MilestoneReview {
   readonly sourceSnapshot?: readonly MilestoneSourceSnapshot[];
 }
 
-export interface ApprovalStage {
-  readonly id: ApprovalStageId;
-  readonly label: string;
-  readonly required: boolean;
-  readonly order?: number;
-  readonly requiredApprovalCount: number;
-  readonly scope: "milestone" | "criteria" | "deliverables";
-  readonly criterionIds?: readonly CriterionId[];
-  readonly deliverableRequirementIds?: readonly DeliverableRequirementId[];
-  /** Opaque host-owned selector; the milestone SDK stores but never resolves it. */
-  readonly authorityRef?: string;
-}
 export interface MilestoneApprovalPolicy { readonly stages: readonly ApprovalStage[] }
 export type ApprovalPolicySnapshot = MilestoneApprovalPolicy;
 
-interface ApprovalRecordBase {
+export interface ApprovalGrantedRecord {
   readonly id: ApprovalRecordId;
+  readonly type: "granted";
   readonly milestoneId: MilestoneId;
   readonly milestoneRevisionId: MilestoneRevisionId;
   readonly stageId: ApprovalStageId;
   readonly actor: ActorRef;
   readonly createdAt: string;
 }
-export interface ApprovalGrantedRecord extends ApprovalRecordBase { readonly type: "granted" }
-export interface ApprovalRejectedRecord extends ApprovalRecordBase { readonly type: "rejected"; readonly reason?: string }
-export interface ApprovalRevokedRecord extends ApprovalRecordBase { readonly type: "revoked"; readonly revokesApprovalId: ApprovalRecordId; readonly reason?: string }
-export interface ApprovalWaivedRecord extends ApprovalRecordBase { readonly type: "waived"; readonly reason: string }
-export type ApprovalRecord = ApprovalGrantedRecord | ApprovalRejectedRecord | ApprovalRevokedRecord | ApprovalWaivedRecord;
+
+export interface ApprovalRejectedRecord {
+  readonly id: ApprovalRecordId;
+  readonly type: "rejected";
+  readonly milestoneId: MilestoneId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly stageId: ApprovalStageId;
+  readonly actor: ActorRef;
+  readonly reason?: string;
+  readonly createdAt: string;
+}
+
+export interface ApprovalRevokedRecord {
+  readonly id: ApprovalRecordId;
+  readonly type: "revoked";
+  readonly milestoneId: MilestoneId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly stageId: ApprovalStageId;
+  readonly actor: ActorRef;
+  readonly revokesApprovalId: ApprovalRecordId;
+  readonly reason?: string;
+  readonly createdAt: string;
+}
+
+export interface ApprovalWaivedRecord {
+  readonly id: ApprovalRecordId;
+  readonly type: "waived";
+  readonly milestoneId: MilestoneId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly stageId: ApprovalStageId;
+  readonly actor: ActorRef;
+  readonly reason: string;
+  readonly createdAt: string;
+}
+
+export type ApprovalRecord =
+  | ApprovalGrantedRecord
+  | ApprovalRejectedRecord
+  | ApprovalRevokedRecord
+  | ApprovalWaivedRecord;
+
+export type MilestoneApprovalRecord = ApprovalRecord;
 
 export interface MilestoneEvaluationPolicySnapshot {
   readonly requiredCriteriaMustBeVerified: boolean;
@@ -229,6 +258,7 @@ export interface MilestoneRevisionSnapshot {
   readonly sources?: readonly MilestoneSourceSnapshot[];
   readonly approvalPolicy?: ApprovalPolicySnapshot;
 }
+
 export interface MilestoneRevision {
   readonly id: MilestoneRevisionId;
   readonly milestoneId: MilestoneId;
@@ -241,12 +271,38 @@ export interface MilestoneRevision {
   readonly snapshot: MilestoneRevisionSnapshot;
 }
 
-export type MilestoneArtifactSubjectType = "milestone" | "milestone_revision" | "criterion" | "deliverable_requirement" | "challenge" | "challenge_evidence" | "review" | "approval" | "acceptance" | "completion";
-export type MilestoneArtifactRole = "reference" | "context" | "specification" | "decision" | "deliverable" | "evidence" | "verification" | "challenge_evidence" | "response_evidence" | "review_evidence" | "approval_evidence" | "acceptance_evidence" | "handover";
+export type MilestoneArtifactSubjectType =
+  | "milestone"
+  | "milestone_revision"
+  | "criterion"
+  | "deliverable_requirement"
+  | "challenge"
+  | "challenge_evidence"
+  | "review"
+  | "approval"
+  | "acceptance"
+  | "completion";
+
+export type MilestoneArtifactRole =
+  | "reference"
+  | "context"
+  | "specification"
+  | "decision"
+  | "deliverable"
+  | "evidence"
+  | "verification"
+  | "challenge_evidence"
+  | "response_evidence"
+  | "review_evidence"
+  | "approval_evidence"
+  | "acceptance_evidence"
+  | "handover";
+
 export type MilestoneArtifactLink = ArtifactLink<MilestoneArtifactRole, MilestoneArtifactSubjectType>;
 export type MilestoneSourceSubjectType = "milestone" | "milestone_revision" | "criterion" | "deliverable_requirement" | "challenge" | "review";
-export type MilestoneSourceRole = "reference" | "context" | "specification" | "decision";
+export type MilestoneSourceRole = ExecutionSourceRole;
 export type MilestoneSourceLink = ArtifactLink<MilestoneSourceRole, MilestoneSourceSubjectType>;
+
 export interface MilestoneArtifactContext {
   readonly requirements: ReadonlyMap<ArtifactRequirementId, ArtifactRequirement>;
   readonly artifacts: ReadonlyMap<ArtifactId, Artifact>;
@@ -255,6 +311,7 @@ export interface MilestoneArtifactContext {
   readonly verifications: ReadonlyMap<ArtifactVerificationId, ArtifactVerification>;
   readonly links: readonly MilestoneArtifactLink[];
 }
+
 export interface ArtifactEvaluationSnapshot {
   readonly artifactRequirementId: ArtifactRequirementId;
   readonly artifactId: ArtifactId;
@@ -263,6 +320,7 @@ export interface ArtifactEvaluationSnapshot {
   readonly verificationId?: ArtifactVerificationId;
   readonly outcome: "satisfied" | "failed" | "waived";
 }
+
 export interface MilestoneSourceSnapshot {
   readonly linkId: ArtifactLinkId;
   readonly artifactId: ArtifactId;
@@ -278,11 +336,13 @@ export interface CriterionAcceptanceSnapshot {
   readonly state: CriterionState;
   readonly satisfied: boolean;
 }
+
 export interface DeliverableAcceptanceSnapshot {
   readonly id: DeliverableRequirementId;
   readonly state: DeliverableRequirementState;
   readonly satisfied: boolean;
 }
+
 export interface DependencyAcceptanceSnapshot {
   readonly id: DependencyId;
   readonly dependsOnMilestoneId: MilestoneId;
@@ -291,16 +351,33 @@ export interface DependencyAcceptanceSnapshot {
   readonly blocking: boolean;
   readonly satisfied: boolean;
 }
-export interface ChallengeAcceptanceSnapshot { readonly id: ChallengeId; readonly target: ChallengeTarget; readonly severity: "non_blocking" | "blocking"; readonly state: ChallengeState; readonly resolution?: ChallengeResolution; readonly blocking: boolean }
+
 export interface ChallengeEvidenceSource {
   readonly linkId: import("@elqora/artifacts").ArtifactLinkId;
   readonly role: "challenge_evidence" | "response_evidence";
   readonly artifactId: ArtifactId;
   readonly artifactVersionId: ArtifactVersionId;
 }
-export type ChallengeEvidenceSourceIssueCode = "evidence_source_role_mismatch" | "evidence_source_unpinned" | "evidence_source_artifact_missing" | "evidence_source_version_missing";
-export interface ChallengeEvidenceSourceIssue { readonly code: ChallengeEvidenceSourceIssueCode; readonly linkId: import("@elqora/artifacts").ArtifactLinkId; readonly message: string }
-export interface ChallengeEvidenceSourceResolution { readonly evidenceId: ChallengeEvidenceId; readonly status: "pending" | "resolved" | "invalid"; readonly sources: readonly ChallengeEvidenceSource[]; readonly issues: readonly ChallengeEvidenceSourceIssue[] }
+
+export type ChallengeEvidenceSourceIssueCode =
+  | "evidence_source_role_mismatch"
+  | "evidence_source_unpinned"
+  | "evidence_source_artifact_missing"
+  | "evidence_source_version_missing";
+
+export interface ChallengeEvidenceSourceIssue {
+  readonly code: ChallengeEvidenceSourceIssueCode;
+  readonly linkId: import("@elqora/artifacts").ArtifactLinkId;
+  readonly message: string;
+}
+
+export interface ChallengeEvidenceSourceResolution {
+  readonly evidenceId: ChallengeEvidenceId;
+  readonly status: "pending" | "resolved" | "invalid";
+  readonly sources: readonly ChallengeEvidenceSource[];
+  readonly issues: readonly ChallengeEvidenceSourceIssue[];
+}
+
 export interface ChallengeEvidenceAcceptanceSnapshot {
   readonly id: ChallengeEvidenceId;
   readonly kind: ChallengeEvidenceKind;
@@ -311,9 +388,36 @@ export interface ChallengeEvidenceAcceptanceSnapshot {
   readonly sourceStatus: ChallengeEvidenceSourceResolution["status"];
   readonly sources: readonly ChallengeEvidenceSource[];
 }
-export interface ChallengeAcceptanceSnapshot { readonly id: ChallengeId; readonly target: ChallengeTarget; readonly severity: "non_blocking" | "blocking"; readonly state: ChallengeState; readonly resolution?: ChallengeResolution; readonly blocking: boolean; readonly evidence: readonly ChallengeEvidenceAcceptanceSnapshot[] }
-export interface ReviewAcceptanceSnapshot { readonly id: ReviewId; readonly milestoneRevisionId: MilestoneRevisionId; readonly state: ReviewState; readonly result?: ReviewResult; readonly artifactVersionIds: readonly ArtifactVersionId[]; readonly satisfied: boolean }
-export interface ApprovalAcceptanceSnapshot { readonly stageId: ApprovalStageId; readonly milestoneRevisionId: MilestoneRevisionId; readonly effectiveApprovalCount: number; readonly requiredApprovalCount: number; readonly satisfied: boolean; readonly waived: boolean; readonly actorIds: readonly string[] }
+
+export interface ChallengeAcceptanceSnapshot {
+  readonly id: ChallengeId;
+  readonly target: ChallengeTarget;
+  readonly severity: "non_blocking" | "blocking";
+  readonly state: ChallengeState;
+  readonly resolution?: ChallengeResolution;
+  readonly blocking: boolean;
+  readonly evidence: readonly ChallengeEvidenceAcceptanceSnapshot[];
+}
+
+export interface ReviewAcceptanceSnapshot {
+  readonly id: ReviewId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly state: ReviewState;
+  readonly result?: ReviewResult;
+  readonly artifactVersionIds: readonly ArtifactVersionId[];
+  readonly satisfied: boolean;
+}
+
+export interface ApprovalAcceptanceSnapshot {
+  readonly stageId: ApprovalStageId;
+  readonly milestoneRevisionId: MilestoneRevisionId;
+  readonly effectiveApprovalCount: number;
+  readonly requiredApprovalCount: number;
+  readonly satisfied: boolean;
+  readonly waived: boolean;
+  readonly actorIds: readonly string[];
+}
+
 export interface MilestoneAcceptanceSnapshot {
   readonly revisionId: MilestoneRevisionId;
   readonly criteria: readonly CriterionAcceptanceSnapshot[];
@@ -325,6 +429,7 @@ export interface MilestoneAcceptanceSnapshot {
   readonly artifacts: readonly ArtifactEvaluationSnapshot[];
   readonly sources?: readonly MilestoneSourceSnapshot[];
 }
+
 export interface MilestoneAcceptance {
   readonly id: AcceptanceId;
   readonly milestoneId: MilestoneId;
@@ -333,6 +438,7 @@ export interface MilestoneAcceptance {
   readonly actor?: ActorRef;
   readonly snapshot: MilestoneAcceptanceSnapshot;
 }
+
 export interface MilestoneCompletion {
   readonly id: CompletionId;
   readonly milestoneId: MilestoneId;
@@ -390,7 +496,6 @@ export interface MilestoneGraphEvaluation {
   readonly runnableMilestoneIds: readonly MilestoneId[];
 }
 
-export type ReopenEffect = "invalidate_completion" | "invalidate_acceptance_and_completion";
 export type ReopenCause =
   | { readonly type: "administrative" }
   | { readonly type: "revision"; readonly revisionId: MilestoneRevisionId }
@@ -401,11 +506,6 @@ export type ReopenCause =
   | { readonly type: "host_requested"; readonly ref?: string };
 export interface ReopenRequest { readonly effect: ReopenEffect; readonly reason: string; readonly actor?: ActorRef; readonly cause?: ReopenCause }
 
-export type EvaluationReasonCode =
-  | "missing_criterion" | "missing_deliverable" | "missing_acceptance" | "unsatisfied_dependency" | "blocking_challenge"
-  | "incomplete_review" | "pending_approval" | "artifact_requirement_missing" | "artifact_submission_missing"
-  | "artifact_verification_missing" | "artifact_verification_failed" | "artifact_version_missing" | "profile_feature_disabled";
-export interface EvaluationReason { readonly code: EvaluationReasonCode; readonly subjectId: string; readonly message: string }
 export interface ArtifactEvaluationResult { readonly satisfied: boolean; readonly snapshots: readonly ArtifactEvaluationSnapshot[]; readonly reasons: readonly EvaluationReason[] }
 export interface AcceptanceEvaluation {
   readonly accepted: boolean;
@@ -413,7 +513,6 @@ export interface AcceptanceEvaluation {
   readonly snapshot: MilestoneAcceptanceSnapshot;
 }
 export interface CompletionEvaluation { readonly completable: boolean; readonly reasons: readonly EvaluationReason[] }
-export interface ProgressResult { readonly completedWeight: number; readonly totalWeight: number; readonly percentage: number }
 export type DerivedMilestoneState = "open" | "accepted" | "completed";
 
 export type MilestoneChange =
@@ -433,7 +532,6 @@ export type MilestoneChange =
   | { readonly type: "accepted"; readonly acceptanceId: AcceptanceId }
   | { readonly type: "completed"; readonly completionId: CompletionId }
   | { readonly type: "reopened"; readonly effect: ReopenEffect };
-export interface EvaluationInvalidation { readonly type: "acceptance" | "completion" | "criterion_verification" | "deliverable_satisfaction"; readonly ref: string; readonly reason: string }
 
 interface EventBase<T extends string, P> {
   readonly id: MilestoneEventId; readonly type: T; readonly milestoneId: MilestoneId;
@@ -485,9 +583,6 @@ export interface MilestoneEditResult {
   readonly invalidations?: readonly EvaluationInvalidation[];
   readonly affectedMilestoneIds?: readonly MilestoneId[];
 }
-
-export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[];
 
 export interface MilestoneWire extends Omit<Milestone, "criteria" | "deliverables" | "dependencies" | "challenges" | "reviews" | "approvalRecords" | "acceptanceRecords" | "completionRecords" | "revisions"> {
   readonly schemaVersion: "1.2";

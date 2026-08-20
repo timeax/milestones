@@ -1,7 +1,25 @@
-import type { Milestone, MilestoneWire } from "../model/domain.js";
+import type {
+  Breakdown,
+  BreakdownWire,
+  Milestone,
+  MilestoneWire,
+  Task,
+  TaskWire,
+} from "../model/domain.js";
 import { MilestoneDomainError } from "../model/errors.js";
-import { MILESTONE_PROTOCOL_VERSION } from "../model/protocol.js";
-import { deserializeMilestone, serializeMilestone } from "../adapters/serialization.js";
+import {
+  BREAKDOWN_PROTOCOL_VERSION,
+  MILESTONE_PROTOCOL_VERSION,
+  TASK_PROTOCOL_VERSION,
+} from "../model/protocol.js";
+import {
+  deserializeBreakdown,
+  deserializeMilestone,
+  deserializeTask,
+  serializeBreakdown,
+  serializeMilestone,
+  serializeTask,
+} from "../adapters/serialization.js";
 
 export interface MilestoneMigrationResult {
   readonly fromVersion: string;
@@ -27,7 +45,9 @@ export function migrateMilestoneWire(value: unknown): MilestoneMigrationResult {
   const appliedMigrations: string[] = [];
   if (version === "1.0") {
     const challenges = migrated["challenges"];
-    if (!Array.isArray(challenges)) throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone 1.0 wire record has malformed challenges");
+    if (!Array.isArray(challenges)) {
+      throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone 1.0 wire record has malformed challenges");
+    }
     migrated["challenges"] = challenges.map((challenge) => ({ ...(challenge as Record<string, unknown>), evidence: [] }));
     migrated["schemaVersion"] = "1.1";
     appliedMigrations.push("1.0-to-1.1");
@@ -53,20 +73,76 @@ function migrateOneOneToOneTwo(wire: Record<string, unknown>): void {
   forEachRecord(wire["reviews"], "reviews", (item) => { item["sourceLinks"] = []; if (item["state"] === "completed") item["sourceSnapshot"] = []; });
   forEachRecord(wire["acceptanceRecords"], "acceptance records", (item) => { record(item["snapshot"], "acceptance snapshot")["sources"] = []; });
 }
-function forEachRecord(value: unknown, name: string, action: (item: Record<string, unknown>) => void): void { if (!Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone 1.1 ${name} are malformed`); value.forEach((item) => action(record(item, name))); }
-function record(value: unknown, name: string): Record<string, unknown> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone ${name} is malformed`); return value as Record<string, unknown>; }
+
+function forEachRecord(value: unknown, name: string, action: (item: Record<string, unknown>) => void): void {
+  if (!Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone 1.1 ${name} are malformed`);
+  value.forEach((item) => action(record(item, name)));
+}
+
+function record(value: unknown, name: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new MilestoneDomainError("SERIALIZATION_INVALID", `Milestone ${name} is malformed`);
+  return value as Record<string, unknown>;
+}
 
 export function migrateAndDeserializeMilestone(value: unknown): Milestone {
   return deserializeMilestone(migrateMilestoneWire(value).wire);
 }
 
+export interface TaskMigrationResult {
+  readonly fromVersion: string;
+  readonly toVersion: typeof TASK_PROTOCOL_VERSION;
+  readonly appliedMigrations: readonly string[];
+  readonly wire: TaskWire;
+}
+
+export function migrateTaskWire(value: unknown): TaskMigrationResult {
+  const version = protocolVersion(value);
+  if (version === TASK_PROTOCOL_VERSION) {
+    const wire = serializeTask(deserializeTask(value));
+    return { fromVersion: version, toVersion: TASK_PROTOCOL_VERSION, appliedMigrations: [], wire };
+  }
+  throw new MilestoneDomainError(
+    "MIGRATION_UNSUPPORTED",
+    `No task migration path exists from ${version} to ${TASK_PROTOCOL_VERSION}`,
+    { fromVersion: version, toVersion: TASK_PROTOCOL_VERSION },
+  );
+}
+
+export function migrateAndDeserializeTask(value: unknown): Task {
+  return deserializeTask(migrateTaskWire(value).wire);
+}
+
+export interface BreakdownMigrationResult {
+  readonly fromVersion: string;
+  readonly toVersion: typeof BREAKDOWN_PROTOCOL_VERSION;
+  readonly appliedMigrations: readonly string[];
+  readonly wire: BreakdownWire;
+}
+
+export function migrateBreakdownWire(value: unknown): BreakdownMigrationResult {
+  const version = protocolVersion(value);
+  if (version === BREAKDOWN_PROTOCOL_VERSION) {
+    const wire = serializeBreakdown(deserializeBreakdown(value));
+    return { fromVersion: version, toVersion: BREAKDOWN_PROTOCOL_VERSION, appliedMigrations: [], wire };
+  }
+  throw new MilestoneDomainError(
+    "MIGRATION_UNSUPPORTED",
+    `No breakdown migration path exists from ${version} to ${BREAKDOWN_PROTOCOL_VERSION}`,
+    { fromVersion: version, toVersion: BREAKDOWN_PROTOCOL_VERSION },
+  );
+}
+
+export function migrateAndDeserializeBreakdown(value: unknown): Breakdown {
+  return deserializeBreakdown(migrateBreakdownWire(value).wire);
+}
+
 function protocolVersion(value: unknown): string {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone migration input must be a wire object");
+    throw new MilestoneDomainError("SERIALIZATION_INVALID", "Migration input must be a wire object");
   }
   const version = (value as Readonly<Record<string, unknown>>)["schemaVersion"];
   if (typeof version !== "string" || version.length === 0) {
-    throw new MilestoneDomainError("SERIALIZATION_INVALID", "Milestone migration input has no schemaVersion");
+    throw new MilestoneDomainError("SERIALIZATION_INVALID", "Migration input has no schemaVersion");
   }
   return version;
 }

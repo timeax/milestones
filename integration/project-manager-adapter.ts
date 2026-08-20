@@ -7,7 +7,7 @@ import {
   type MilestoneArtifactContext,
   type MilestoneEditResult,
   type MilestoneGraphSnapshot,
-} from "@elqora/milestones";
+} from "@timeax/milestones";
 
 export interface ProjectMilestoneBinding {
   readonly projectId: string;

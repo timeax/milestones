@@ -53,5 +53,6 @@ describe("milestone Sources", () => {
     ).toThrow("Sources on historical revisions are immutable");
     expect(() => ed2.sources.updateRole(srcId as never, "specification")).toThrow("Sources on historical revisions are immutable");
     expect(() => ed2.sources.update(srcId as never, { note: "New note" })).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.remove("non-existent-source" as never)).toThrow("Source link non-existent-source was not found");
   });
 });

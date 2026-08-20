@@ -7,6 +7,15 @@ export type {
   MilestoneAuthorizationContext,
   MilestoneAuthorizationInput,
   MilestoneEditorOptions,
+  TaskAction,
+  TaskActionSubject,
+  TaskAuthorizationContext,
+  TaskAuthorizationInput,
+  TaskEditorOptions,
+  BreakdownAction,
+  BreakdownAuthorizationContext,
+  BreakdownAuthorizationInput,
+  BreakdownEditorOptions,
 } from "../editors/editor-contracts.js";
 export {
   MilestoneDomainError,

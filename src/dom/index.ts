@@ -1,5 +1,5 @@
 /*
- * Public Milestone DOM API.
+ * Public Milestone, Task, and Breakdown DOM API.
  *
  * Important:
  *
@@ -17,20 +17,43 @@
 export type * from "./types.js";
 
 /* -------------------------------------------------------------------------- */
-/*                               Root document                                */
+/*                               Root documents                               */
 /* -------------------------------------------------------------------------- */
 
+export { MilestoneDocument } from "./document.js";
 export {
-    MilestoneDocument,
-} from "./document.js";
+  TaskDocument,
+  TaskDocumentBuilder,
+  createTaskDocument,
+  createTaskDocumentContext,
+  type TaskDocumentBuildInput,
+  type TaskDocumentContext,
+  type TaskProfileDocument,
+  type TaskTimingDocument,
+  type TaskRemindersDocument,
+  type TaskScopeDocument,
+  type TaskOverviewDocument,
+  type TaskAcceptanceStatusDocument,
+  type TaskCompletionStatusDocument,
+} from "./task-document.js";
+export {
+  BreakdownDocument,
+  BreakdownDocumentBuilder,
+  createBreakdownDocument,
+  createBreakdownDocumentContext,
+  type BreakdownDocumentBuildInput,
+  type BreakdownDocumentContext,
+  type BreakdownDefinitionDocument,
+  type MilestoneProfileResolver,
+} from "./breakdown-document.js";
 
 /* -------------------------------------------------------------------------- */
 /*                                Construction                                */
 /* -------------------------------------------------------------------------- */
 
 export {
-    createMilestoneDocument,
-    createMilestoneDocumentContext,
-    MilestoneDocumentBuilder,
-    type MilestoneDocumentBuildInput,
+  createMilestoneDocument,
+  createMilestoneDocumentContext,
+  MilestoneDocumentBuilder,
+  type MilestoneDocumentBuildInput,
 } from "./builder.js";

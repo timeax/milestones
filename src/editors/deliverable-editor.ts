@@ -3,13 +3,26 @@ import type {
   DeliverableRequirement,
   DeliverableRequirementId,
   DeliverableRequirementState,
+  TaskDeliverableRequirement,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 import { assertDeliverableTransition } from "../services/transitions/deliverables.js";
-import { emit } from "./internal/events.js";
-import { authorize, clone, ensureOpen, equalDomainValue, feature, requiredText } from "./internal/helpers.js";
-import { beginMaterialRevision } from "./internal/revision.js";
-import type { EditorSession } from "./internal/session.js";
+import { emit, emitTask } from "./internal/events.js";
+import {
+  authorize,
+  authorizeTask,
+  clone,
+  ensureOpen,
+  equalDomainValue,
+  feature,
+  requiredText,
+} from "./internal/helpers.js";
+import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/revision.js";
+import type { EditorSession, TaskEditorSession } from "./internal/session.js";
+
+function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
+  return "scope" in session.draft;
+}
 
 interface DeliverableEditOptions {
   readonly reason?: string;
@@ -21,36 +34,50 @@ interface DeliverableDefinitionEditOptions extends DeliverableEditOptions {
 }
 
 export class DeliverableEditor {
-  private readonly session: EditorSession;
+  private readonly session: EditorSession | TaskEditorSession;
 
   public constructor(session: never) {
-    this.session = session as EditorSession;
+    this.session = session as EditorSession | TaskEditorSession;
   }
 
   public add(
-    input: Omit<DeliverableRequirement, "id">,
+    input: Omit<DeliverableRequirement | TaskDeliverableRequirement, "id">,
     options: DeliverableEditOptions = {},
   ): DeliverableRequirementId {
     ensureOpen(this.session);
     feature(this.session.profile.deliverables.enabled, "deliverables");
     requiredText(input.title, "Deliverable title");
-    beginMaterialRevision(this.session, options.reason, options.actor);
-    const deliverable: DeliverableRequirement = {
-      id: this.session.ids.deliverableRequirement(),
-      ...clone(input),
-    };
-    this.session.draft.deliverables.push(deliverable);
-    this.session.changes.push({
-      type: "deliverable_changed",
-      deliverableRequirementId: deliverable.id,
-    });
-    emit(this.session, "deliverable.added", { deliverable }, options.actor);
+    const id = this.session.ids.deliverableRequirement();
+    const deliverable = { id, ...clone(input) } as DeliverableRequirement;
+    const isTask = isTaskSession(this.session);
+    if (isTask) {
+      beginMaterialTaskRevision(this.session, options.reason, options.actor);
+      this.session.draft.deliverables.push(deliverable as unknown as TaskDeliverableRequirement);
+      this.session.changes.push({
+        type: "deliverable_changed",
+        deliverableRequirementId: deliverable.id,
+      });
+      emitTask(
+        this.session as TaskEditorSession,
+        "task.deliverable_added",
+        { deliverable: deliverable as unknown as TaskDeliverableRequirement },
+        options.actor,
+      );
+    } else {
+      beginMaterialRevision(this.session, options.reason, options.actor);
+      this.session.draft.deliverables.push(deliverable);
+      this.session.changes.push({
+        type: "deliverable_changed",
+        deliverableRequirementId: deliverable.id,
+      });
+      emit(this.session as EditorSession, "deliverable.added", { deliverable }, options.actor);
+    }
     return deliverable.id;
   }
 
   public update(
     id: DeliverableRequirementId,
-    patch: Partial<Omit<DeliverableRequirement, "id" | "state">>,
+    patch: Partial<Omit<DeliverableRequirement | TaskDeliverableRequirement, "id" | "state">>,
     options: DeliverableDefinitionEditOptions = {},
   ): void {
     ensureOpen(this.session);
@@ -58,11 +85,17 @@ export class DeliverableEditor {
     const updated = { ...item, ...clone(patch), id, state: item.state };
     requiredText(updated.title, "Deliverable title");
     if (equalDomainValue(item, updated)) return;
-    beginMaterialRevision(this.session, options.reason, options.actor);
-    const state = options.satisfactionEffect === "invalidate"
-      && (updated.state === "satisfied" || updated.state === "waived")
-      ? "missing"
-      : updated.state;
+    const isTask = isTaskSession(this.session);
+    if (isTask) {
+      beginMaterialTaskRevision(this.session, options.reason, options.actor);
+    } else {
+      beginMaterialRevision(this.session, options.reason, options.actor);
+    }
+    const state =
+      options.satisfactionEffect === "invalidate" &&
+      (updated.state === "satisfied" || updated.state === "waived")
+        ? "missing"
+        : updated.state;
     if (state !== updated.state) {
       this.session.invalidations.push({
         type: "deliverable_satisfaction",
@@ -70,43 +103,70 @@ export class DeliverableEditor {
         reason: options.reason ?? "Deliverable definition changed",
       });
     }
-    this.put(id, { ...updated, state });
+    this.put(id, { ...updated, state } as any);
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: id });
-    emit(this.session, "deliverable.changed", { deliverableRequirementId: id, state }, options.actor);
+    if (isTask) {
+      emitTask(this.session as TaskEditorSession, "task.deliverable_changed", { deliverableRequirementId: id, state }, options.actor);
+    } else {
+      emit(this.session as EditorSession, "deliverable.changed", { deliverableRequirementId: id, state }, options.actor);
+    }
   }
 
   public replace(
     id: DeliverableRequirementId,
-    replacement: Omit<DeliverableRequirement, "id">,
+    replacement: Omit<DeliverableRequirement | TaskDeliverableRequirement, "id">,
     options: DeliverableEditOptions = {},
   ): DeliverableRequirementId {
     ensureOpen(this.session);
     const index = this.index(id);
-    beginMaterialRevision(
-      this.session,
-      options.reason ?? "Deliverable semantically replaced",
-      options.actor,
-    );
-    const item: DeliverableRequirement = {
+    const isTask = isTaskSession(this.session);
+    if (isTask) {
+      beginMaterialTaskRevision(
+        this.session,
+        options.reason ?? "Deliverable semantically replaced",
+        options.actor,
+      );
+    } else {
+      beginMaterialRevision(
+        this.session,
+        options.reason ?? "Deliverable semantically replaced",
+        options.actor,
+      );
+    }
+    const item = {
       id: this.session.ids.deliverableRequirement(),
       ...clone(replacement),
-    };
-    this.session.draft.deliverables[index] = item;
+    } as DeliverableRequirement;
+    this.session.draft.deliverables[index] = item as any;
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: item.id });
-    emit(this.session, "deliverable.removed", { deliverableRequirementId: id }, options.actor);
-    emit(this.session, "deliverable.added", { deliverable: item }, options.actor);
+    if (isTask) {
+      emitTask(this.session as TaskEditorSession, "task.deliverable_removed", { deliverableRequirementId: id }, options.actor);
+      emitTask(this.session as TaskEditorSession, "task.deliverable_added", { deliverable: item as any }, options.actor);
+    } else {
+      emit(this.session as EditorSession, "deliverable.removed", { deliverableRequirementId: id }, options.actor);
+      emit(this.session as EditorSession, "deliverable.added", { deliverable: item }, options.actor);
+    }
     return item.id;
   }
 
   public remove(id: DeliverableRequirementId, options: DeliverableEditOptions = {}): void {
     ensureOpen(this.session);
     this.index(id);
-    beginMaterialRevision(this.session, options.reason, options.actor);
-    this.session.draft.deliverables = this.session.draft.deliverables.filter(
+    const isTask = isTaskSession(this.session);
+    if (isTask) {
+      beginMaterialTaskRevision(this.session, options.reason, options.actor);
+    } else {
+      beginMaterialRevision(this.session, options.reason, options.actor);
+    }
+    this.session.draft.deliverables = (this.session.draft.deliverables as any[]).filter(
       (item) => item.id !== id,
     );
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: id });
-    emit(this.session, "deliverable.removed", { deliverableRequirementId: id }, options.actor);
+    if (isTask) {
+      emitTask(this.session as TaskEditorSession, "task.deliverable_removed", { deliverableRequirementId: id }, options.actor);
+    } else {
+      emit(this.session as EditorSession, "deliverable.removed", { deliverableRequirementId: id }, options.actor);
+    }
   }
 
   public submit(id: DeliverableRequirementId, actor?: ActorRef): void { this.transition(id, "submitted", actor); }
@@ -124,36 +184,52 @@ export class DeliverableEditor {
     feature(this.session.profile.deliverables.enabled, "deliverables");
     const item = this.get(id);
     assertDeliverableTransition(item.state, state);
+    const isTask = isTaskSession(this.session);
     if (state === "satisfied" || state === "waived") {
-      authorize(
-        this.session,
-        state === "satisfied" ? "deliverable.satisfy" : "deliverable.waive",
-        actor,
-        { type: "deliverable_requirement", deliverableRequirementId: id },
-      );
+      if (isTask) {
+        authorizeTask(
+          this.session as TaskEditorSession,
+          state === "satisfied" ? "deliverable.satisfy" : "deliverable.waive",
+          actor,
+          { type: "deliverable_requirement", deliverableRequirementId: id },
+        );
+      } else {
+        authorize(
+          this.session as EditorSession,
+          state === "satisfied" ? "deliverable.satisfy" : "deliverable.waive",
+          actor,
+          { type: "deliverable_requirement", deliverableRequirementId: id },
+        );
+      }
     }
     this.put(id, { ...item, state });
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: id });
-    emit(this.session, "deliverable.changed", { deliverableRequirementId: id, state }, actor);
+    if (isTask) {
+      emitTask(this.session as TaskEditorSession, "task.deliverable_changed", { deliverableRequirementId: id, state }, actor);
+    } else {
+      emit(this.session as EditorSession, "deliverable.changed", { deliverableRequirementId: id, state }, actor);
+    }
   }
 
-  private put(id: DeliverableRequirementId, item: DeliverableRequirement): void {
-    this.session.draft.deliverables[this.index(id)] = item;
+  private put(id: DeliverableRequirementId, item: DeliverableRequirement | TaskDeliverableRequirement): void {
+    (this.session.draft.deliverables as any[])[this.index(id)] = clone(item);
   }
 
-  private get(id: DeliverableRequirementId): DeliverableRequirement {
-    const value = this.session.draft.deliverables.find((item) => item.id === id);
+  private get(id: DeliverableRequirementId): DeliverableRequirement | TaskDeliverableRequirement {
+    const value = (this.session.draft.deliverables as any[]).find((item) => item.id === id);
     invariant(value !== undefined, "NOT_FOUND", `Deliverable ${id} was not found`);
     return value;
   }
 
   private index(id: DeliverableRequirementId): number {
-    const index = this.session.draft.deliverables.findIndex((item) => item.id === id);
+    const index = (this.session.draft.deliverables as any[]).findIndex((item) => item.id === id);
     invariant(index >= 0, "NOT_FOUND", `Deliverable ${id} was not found`);
     return index;
   }
 }
 
-export function createDeliverableEditor(session: EditorSession): DeliverableEditor {
+export type TaskDeliverableEditor = DeliverableEditor;
+
+export function createDeliverableEditor(session: EditorSession | TaskEditorSession): DeliverableEditor {
   return new DeliverableEditor(session as never);
 }

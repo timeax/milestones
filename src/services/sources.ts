@@ -8,8 +8,25 @@ import type {
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 
-const roles = new Set(["reference", "context", "specification", "decision"]);
-const subjects = new Set(["milestone", "milestone_revision", "criterion", "deliverable_requirement", "challenge", "review"]);
+const roles = new Set([
+  "reference",
+  "context",
+  "specification",
+  "decision",
+  "verification",
+  "provenance",
+  "audit",
+]);
+const subjects = new Set([
+  "milestone",
+  "milestone_revision",
+  "task",
+  "task_revision",
+  "criterion",
+  "deliverable_requirement",
+  "challenge",
+  "review",
+]);
 
 export function isDefinitionBearing(link: MilestoneSourceLink): boolean {
   return link.role === "specification" || link.role === "decision";

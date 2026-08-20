@@ -10,7 +10,7 @@ import {
   type MilestoneGraphSnapshot,
   type MilestoneIdGenerator,
   type MilestoneProfile,
-} from "@elqora/milestones";
+} from "@timeax/milestones";
 
 export interface LoadedMilestoneOperation {
   readonly milestoneJson: string;
