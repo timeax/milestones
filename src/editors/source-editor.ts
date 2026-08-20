@@ -23,6 +23,7 @@ export class MilestoneSourceEditor {
 
   public remove(linkId: ArtifactLinkId, actor?: ActorRef): void {
     ensureOpen(this.session); const found = this.find(linkId);
+    this.assertMutableSubject(found.link.subject);
     authorize(this.session, "source.remove", actor, { type: "source", subject: found.link.subject, linkId });
     this.materialIfNeeded(undefined, found.link, actor);
     found.links.splice(found.index, 1); this.changed(linkId); emit(this.session, "source.detached", { linkId, subject: clone(found.link.subject) }, actor);
@@ -30,6 +31,7 @@ export class MilestoneSourceEditor {
 
   public replace(linkId: ArtifactLinkId, source: MilestoneSourceLink, actor?: ActorRef): void {
     ensureOpen(this.session); assertValidSourceLink(source); const found = this.find(linkId);
+    this.assertMutableSubject(found.link.subject);
     invariant(sourceSubjectOwnsLink(source, found.link.subject), "INVALID_ARGUMENT", "Replacement Source must keep the same subject");
     authorize(this.session, "source.replace", actor, { type: "source", subject: found.link.subject, linkId });
     this.materialIfNeeded(source, found.link, actor);
@@ -38,19 +40,33 @@ export class MilestoneSourceEditor {
   }
 
   public updateRole(linkId: ArtifactLinkId, role: MilestoneSourceRole, actor?: ActorRef): void {
-    const found = this.find(linkId); const source = { ...found.link, role } as MilestoneSourceLink;
+    const found = this.find(linkId);
+    this.assertMutableSubject(found.link.subject);
+    const source = { ...found.link, role } as MilestoneSourceLink;
     assertValidSourceLink(source); authorize(this.session, "source.change_role", actor, { type: "source", subject: found.link.subject, linkId });
     this.materialIfNeeded(source, found.link, actor); found.links[found.index] = source; this.changed(linkId);
     emit(this.session, "source.role_changed", { linkId, previousRole: found.link.role, role }, actor);
   }
 
   public update(linkId: ArtifactLinkId, patch: { readonly note?: string; readonly metadata?: ArtifactMetadata; readonly artifactVersionId?: ArtifactVersionId }, actor?: ActorRef): void {
-    const found = this.find(linkId); const source = { ...found.link, ...clone(patch) } as MilestoneSourceLink;
+    const found = this.find(linkId);
+    this.assertMutableSubject(found.link.subject);
+    const source = { ...found.link, ...clone(patch) } as MilestoneSourceLink;
     assertValidSourceLink(source); if (equalDomainValue(source, found.link)) return;
     authorize(this.session, "source.update", actor, { type: "source", subject: found.link.subject, linkId });
     this.materialIfNeeded(source, found.link, actor); found.links[found.index] = source; this.changed(linkId);
     const changed = (["note", "metadata", "artifactVersionId"] as const).filter((key) => !equalDomainValue(source[key], found.link[key])).map((key) => key === "artifactVersionId" ? "artifact_version" : key);
     emit(this.session, "source.changed", { source: clone(source), changed }, actor);
+  }
+
+  private assertMutableSubject(subject: SourceTarget): void {
+    if (subject.type === "milestone_revision") {
+      invariant(
+        this.session.revision?.id === subject.id,
+        "INVALID_ARGUMENT",
+        "Sources on historical revisions are immutable",
+      );
+    }
   }
 
   private materialIfNeeded(next: MilestoneSourceLink | undefined, previous: MilestoneSourceLink | undefined, actor?: ActorRef): void {

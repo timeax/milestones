@@ -32,4 +32,26 @@ describe("milestone Sources", () => {
     const result = editor.commit();
     expect(result.revision?.sourceLinks).toHaveLength(1);
   });
+
+  it("rejects mutating sources on committed historical revisions", () => {
+    const h = create();
+    const ed1 = new MilestoneEditor(h.milestone, h.profile, h);
+    const revId = ed1.revisions.begin("Add revision source");
+    const srcId = "rev-src-1";
+    ed1.sources.attach(source({ type: "milestone_revision", id: revId }, "decision", srcId));
+    const committed = ed1.commit().milestone;
+
+    // Open a new editor session where revId is now committed/historical
+    const ed2 = new MilestoneEditor(committed, h.profile, h);
+
+    expect(() => ed2.sources.remove(srcId as never)).toThrow("Sources on historical revisions are immutable");
+    expect(() =>
+      ed2.sources.replace(
+        srcId as never,
+        source({ type: "milestone_revision", id: revId }, "decision", "replacement-src"),
+      ),
+    ).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.updateRole(srcId as never, "specification")).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.update(srcId as never, { note: "New note" })).toThrow("Sources on historical revisions are immutable");
+  });
 });

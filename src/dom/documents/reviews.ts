@@ -157,8 +157,8 @@ export class ReviewOverviewDocumentImpl
   }
 
   /**
-   * Whether this Review itself concluded with the result required by the
-   * current evaluation policy.
+   * Whether this Review itself historically concluded with the "accepted"
+   * result.
    *
    * Historical Reviews can therefore still be "accepted" Reviews even though
    * they no longer satisfy current milestone acceptance.
