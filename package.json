@@ -1,5 +1,5 @@
 {
-  "name": "@elqora/milestones",
+  "name": "@timeax/milestones",
   "version": "0.1.0",
   "description": "Storage-neutral milestone lifecycle and evaluation domain engine.",
   "type": "module",
@@ -95,5 +95,8 @@
     "artifacts",
     "typescript"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "license": "Unlicense"
 }
