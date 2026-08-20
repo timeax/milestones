@@ -14,6 +14,7 @@ export class MilestoneSourceEditor {
 
   public attach(source: MilestoneSourceLink, actor?: ActorRef): void {
     ensureOpen(this.session); assertValidSourceLink(source); this.assertOwned(source);
+    if (source.subject.type === "milestone_revision") invariant(this.session.revision?.id === source.subject.id, "INVALID_ARGUMENT", "Revision Sources must target the open draft revision");
     authorize(this.session, "source.attach", actor, { type: "source", subject: source.subject, linkId: source.id });
     this.materialIfNeeded(source, undefined, actor);
     const links = this.links(source.subject); invariant(!links.some((item) => item.id === source.id), "DUPLICATE_ID", `Source link ${source.id} already exists`);
@@ -59,7 +60,7 @@ export class MilestoneSourceEditor {
   private assertOwned(link: MilestoneSourceLink): void {
     const subject = link.subject;
     if (subject.type === "milestone") invariant(subject.id === this.session.draft.id, "INVALID_ARGUMENT", "Source does not belong to this milestone");
-    else if (subject.type === "milestone_revision") invariant(this.session.revision?.id === subject.id, "INVALID_ARGUMENT", "Revision Sources must target the open draft revision");
+    else if (subject.type === "milestone_revision") invariant(this.session.revision?.id === subject.id || this.session.draft.revisions.some((item) => item.id === subject.id), "INVALID_ARGUMENT", "Revision Sources must target a revision of this milestone");
     else if (subject.type === "criterion") invariant(this.session.draft.criteria.some((item) => item.id === subject.id), "NOT_FOUND", "Source criterion does not exist");
     else if (subject.type === "deliverable_requirement") invariant(this.session.draft.deliverables.some((item) => item.id === subject.id), "NOT_FOUND", "Source deliverable does not exist");
     else if (subject.type === "challenge") invariant(this.session.draft.challenges.some((item) => item.id === subject.id), "NOT_FOUND", "Source challenge does not exist");

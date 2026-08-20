@@ -30,6 +30,12 @@ import type {
 } from "../types.js";
 
 import {
+  indexById,
+  requireFromMap,
+  sliceCollection,
+} from "../internal/collection.js";
+
+import {
   createTextDocument,
 } from "./text.js";
 
@@ -276,23 +282,17 @@ export class MilestoneSourcesDocumentImpl
         links: readonly MilestoneSourceLink[],
         artifacts?: MilestoneArtifactContext,
     ) {
-        const byId = new Map<ArtifactLinkId, MilestoneSourceLink>();
-
         for (const link of links) {
             assertValidSourceLink(link);
-
-            if (byId.has(link.id)) {
-                throw new Error(
-                    `Duplicate Source link ${link.id} in DOM collection`,
-                );
-            }
-
-            byId.set(link.id, link);
         }
 
         this.#links = [...links];
         this.#artifacts = artifacts;
-        this.#byId = byId;
+        this.#byId = indexById(
+            this.#links,
+            (link) => link.id,
+            "Source link",
+        );
     }
 
     getCount(): number {
@@ -338,13 +338,13 @@ export class MilestoneSourcesDocumentImpl
      * belong to this collection.
      */
     require(id: ArtifactLinkId): MilestoneSourceDocument {
-        const document = this.get(id);
-
-        if (document === undefined) {
-            throw new Error(`Source link ${id} was not found`);
-        }
-
-        return document;
+        return this.#createDocument(
+            requireFromMap(
+                this.#byId,
+                id,
+                "Source link",
+            ),
+        );
     }
 
     getByRole(
@@ -397,7 +397,6 @@ export class MilestoneSourcesDocumentImpl
 
 /* -------------------------------------------------------------------------- */
 /*                                 Factories                                  */
-
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -443,7 +442,6 @@ export function createSourcesDocumentForSubject(
 
 /* -------------------------------------------------------------------------- */
 /*                              Resolution helper                             */
-
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -475,65 +473,4 @@ function tryResolveSource(
         link,
         artifacts,
     );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                               List helpers                                 */
-
-/* -------------------------------------------------------------------------- */
-
-function sliceCollection<T>(
-    values: readonly T[],
-    options: DocumentListOptions,
-): readonly T[] {
-    const offset = normalizeNonNegativeInteger(
-        options.offset ?? 0,
-        "offset",
-    );
-
-    const limit =
-        options.limit === undefined
-            ? undefined
-            : normalizeNonNegativeInteger(
-                options.limit,
-                "limit",
-            );
-
-    if (offset >= values.length) {
-        return [];
-    }
-
-    if (limit === undefined) {
-        return values.slice(offset);
-    }
-
-    return values.slice(
-        offset,
-        offset + limit,
-    );
-}
-
-function normalizeNonNegativeInteger(
-    value: number,
-    name: string,
-): number {
-    if (!Number.isFinite(value)) {
-        throw new RangeError(
-            `${name} must be a finite number`,
-        );
-    }
-
-    if (!Number.isInteger(value)) {
-        throw new RangeError(
-            `${name} must be an integer`,
-        );
-    }
-
-    if (value < 0) {
-        throw new RangeError(
-            `${name} must be greater than or equal to 0`,
-        );
-    }
-
-    return value;
 }

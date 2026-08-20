@@ -47,6 +47,10 @@
     "./migrations": {
       "types": "./dist/public/migrations.d.ts",
       "import": "./dist/public/migrations.js"
+    },
+    "./dom": {
+      "types": "./dist/public/dom.d.ts",
+      "import": "./dist/public/dom.js"
     }
   },
   "types": "./dist/index.d.ts",

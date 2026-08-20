@@ -486,6 +486,7 @@ export interface MilestoneReadinessDocument {
   getDependencies(): DependenciesDocument;
   getSatisfiedDependencyCount(): number;
   getUnsatisfiedDependencyCount(): number;
+  getUnknownDependencyCount(): number;
 }
 
 /* -------------------------------------------------------------------------- */

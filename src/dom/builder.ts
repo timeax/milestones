@@ -1,10 +1,13 @@
 import type {
     CriterionGateState,
+    CriterionId,
     DeliverableGateState,
+    DeliverableRequirementId,
     Milestone,
     MilestoneArtifactContext,
     MilestoneGraphNode,
     MilestoneGraphSnapshot,
+    MilestoneId,
     MilestoneProfile,
 } from "../model/domain.js";
 
@@ -358,14 +361,14 @@ function assertGraphNodeMatches(
 
 function assertCriterionGateMapsMatch(
     expected: ReadonlyMap<
-        string,
+        CriterionId,
         CriterionGateState
     >,
     actual: ReadonlyMap<
-        string,
+        CriterionId,
         CriterionGateState
     >,
-    milestoneId: string,
+    milestoneId: MilestoneId,
 ): void {
     invariant(
         actual.size === expected.size,
@@ -423,14 +426,14 @@ function assertCriterionGateMapsMatch(
 
 function assertDeliverableGateMapsMatch(
     expected: ReadonlyMap<
-        string,
+        DeliverableRequirementId,
         DeliverableGateState
     >,
     actual: ReadonlyMap<
-        string,
+        DeliverableRequirementId,
         DeliverableGateState
     >,
-    milestoneId: string,
+    milestoneId: MilestoneId,
 ): void {
     invariant(
         actual.size === expected.size,

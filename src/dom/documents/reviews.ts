@@ -48,21 +48,15 @@ import {
 /**
  * Whether the Review itself reached a successful conclusion.
  *
- * This says nothing about whether the Review belongs to the current
- * Milestone revision.
+ * This is a historical fact about the Review record itself (state === "completed"
+ * and result === "accepted") and does NOT depend on a later revision's evaluation policy.
  */
 function reviewIsAccepted(
   review: MilestoneReview,
-  context: MilestoneDocumentContext,
 ): boolean {
-  const policy = currentPolicy(
-    context.milestone,
-  );
-
   return (
     review.state === "completed" &&
-    review.result ===
-      policy.requiredReviewResult
+    review.result === "accepted"
   );
 }
 
@@ -76,13 +70,21 @@ function reviewSatisfiesCurrentAcceptance(
   review: MilestoneReview,
   context: MilestoneDocumentContext,
 ): boolean {
+  if (
+    review.milestoneRevisionId !==
+    context.milestone.currentRevisionId
+  ) {
+    return false;
+  }
+
+  const policy = currentPolicy(
+    context.milestone,
+  );
+
   return (
-    review.milestoneRevisionId ===
-      context.milestone.currentRevisionId &&
-    reviewIsAccepted(
-      review,
-      context,
-    )
+    review.state === "completed" &&
+    review.result ===
+      policy.requiredReviewResult
   );
 }
 
@@ -164,7 +166,6 @@ export class ReviewOverviewDocumentImpl
   isAccepted(): boolean {
     return reviewIsAccepted(
       this.#review,
-      this.#context,
     );
   }
 
@@ -311,7 +312,6 @@ export class ReviewDocumentImpl
   override isAccepted(): boolean {
     return reviewIsAccepted(
       this.#review,
-      this.#context,
     );
   }
 
@@ -464,7 +464,6 @@ export class ReviewsDocumentImpl
         (review) =>
           reviewIsAccepted(
             review,
-            this.#context,
           ),
       )
       .map(

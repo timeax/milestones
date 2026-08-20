@@ -3,6 +3,7 @@ const expectedRoot = [
   "ApprovalEditor", "ChallengeEditor", "CriteriaEditor", "DEFAULT_EDITOR_HISTORY_LIMIT", "EvidenceEditor",
   "DefinitionEditor", "DeliverableEditor", "DependencyEditor", "FixedMilestoneClock",
   "MAX_EDITOR_HISTORY_LIMIT", "MILESTONE_PROTOCOL_VERSION", "MilestoneDomainError", "MilestoneEditor", "MilestoneSourceEditor", "MilestoneValidationError", "SourceEditor", "migrateAndDeserializeMilestone", "migrateMilestoneWire",
+  "MilestoneDocument", "MilestoneDocumentBuilder", "createMilestoneDocument", "createMilestoneDocumentContext",
   "ReviewEditor", "RevisionEditor", "SequenceMilestoneIdGenerator", "SystemMilestoneClock",
   "asAcceptanceId", "asApprovalRecordId", "asApprovalStageId", "asChallengeEvidenceId", "asChallengeId", "asCompletionId",
   "affectedMilestoneIds", "asCriterionId", "asDeliverableRequirementId", "asDependencyId", "asMilestoneEventId", "asMilestoneId",
@@ -29,6 +30,7 @@ const subpaths = {
   validation: "validateMilestone",
   testing: "FixedMilestoneClock",
   migrations: "migrateMilestoneWire",
+  dom: "MilestoneDocument",
 };
 for (const [subpath, requiredExport] of Object.entries(subpaths)) {
   const module = await import(`../dist/public/${subpath}.js`);
