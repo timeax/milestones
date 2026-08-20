@@ -1,10 +1,19 @@
-# Milestones
+# Milestones & Structured Execution Domain
 
-A storage-neutral TypeScript domain engine for milestone definition, revision,
-evaluation, acceptance, completion, reopening, and auditing. It integrates with
-the canonical `@elqora/artifacts` protocol through explicit immutable contexts.
+A storage-neutral TypeScript domain engine for structured execution, definition, revision,
+evaluation, acceptance, completion, reopening, and auditing across three core domain aggregates:
+
+1. **Milestone**: Formal planned outcome with rigorous acceptance/completion ledgers and full backward compatibility.
+2. **Task**: Structured execution unit with flexible scoping (project, milestone, breakdown, parent task), timing, reminders, and mixed cross-entity dependencies.
+3. **Breakdown**: Planning container aggregate decomposing a parent milestone into child milestones without conflating child completion with parent completion.
+
+It integrates with the canonical `@elqora/artifacts` protocol through explicit immutable contexts.
 
 The normative behavior is specified in `OVERVIEW.md`.
+
+## Quick Start
+
+### Milestone (Planned Outcome)
 
 ```ts
 import {
@@ -25,8 +34,66 @@ const created = MilestoneEditor.create(
 );
 
 const editor = new MilestoneEditor(created.milestone, profile, { ids, clock });
-editor.criteria.verify(created.milestone.criteria[0]!.id, { id: "reviewer" });
+editor.criteria.verify(created.milestone.criteria[0]!.id, { id: "reviewer", type: "user" });
 const result = editor.commit();
+```
+
+### Task (Execution Unit)
+
+```ts
+import {
+  FixedTaskClock,
+  SequenceTaskIdGenerator,
+  TaskEditor,
+} from "@timeax/milestones";
+
+const ids = new SequenceTaskIdGenerator("task-demo");
+const clock = new FixedTaskClock("2026-08-20T12:00:00.000Z");
+
+const taskEditor = TaskEditor.create(
+  {
+    profile: taskProfile,
+    scope: { type: "milestone", milestoneId: "ms-1" as any },
+    definition: { title: "Implement feature" },
+    timing: {
+      startsAt: "2026-08-20T12:00:00.000Z",
+      dueAt: "2026-08-25T12:00:00.000Z",
+      timeZone: "UTC",
+    },
+    reminders: [
+      { trigger: { type: "before_due", durationMinutes: 120 } },
+    ],
+  },
+  { ids, clock },
+);
+
+taskEditor.start();
+taskEditor.complete();
+const taskResult = taskEditor.commit();
+```
+
+### Breakdown (Milestone Plan Container)
+
+```ts
+import {
+  BreakdownEditor,
+  FixedBreakdownClock,
+  SequenceBreakdownIdGenerator,
+} from "@timeax/milestones";
+
+const ids = new SequenceBreakdownIdGenerator("bd-demo");
+const clock = new FixedBreakdownClock("2026-08-20T12:00:00.000Z");
+
+const breakdownEditor = BreakdownEditor.create(
+  {
+    parentMilestoneId: "parent-ms-1" as any,
+    definition: { title: "Phase 1 Decomposition" },
+    milestones: [childMilestone1, childMilestone2],
+  },
+  { ids, clock },
+);
+
+const breakdownResult = breakdownEditor.commit();
 ```
 
 The package performs no persistence, network, authorization, notification,

@@ -64,6 +64,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
       currentVersionId: "ver-1" as any,
       createdBy: { id: "u1", type: "user" },
       createdAt: "2026-08-20T12:00:00.000Z",
+      updatedAt: "2026-08-20T12:00:00.000Z",
     };
 
     const version: ArtifactVersion = {
@@ -116,7 +117,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
           {
             title: "Artifact Criterion",
             required: true,
-            state: "pending" as const,
+            state: "not_started" as const,
             artifactRequirementIds: ["req-1" as any],
           },
         ],
@@ -124,7 +125,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
           {
             title: "Artifact Deliverable",
             required: true,
-            state: "pending" as const,
+            state: "missing" as const,
             artifactRequirementIds: ["req-1" as any],
           },
         ],
@@ -215,24 +216,27 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
       [
         {
           id: "g1" as any,
+          taskId: "task-1" as any,
           stageId: "stg1" as any,
-          taskRevisionId: "rev1",
+          taskRevisionId: "rev1" as any,
           type: "granted",
           actor: { id: "alice", type: "user" },
           createdAt: "2026-08-20T12:00:00.000Z",
         },
         {
           id: "g2" as any,
+          taskId: "task-1" as any,
           stageId: "stg1" as any,
-          taskRevisionId: "rev1",
+          taskRevisionId: "rev1" as any,
           type: "granted",
           actor: { id: "bob", type: "user" },
           createdAt: "2026-08-20T12:00:00.000Z",
         },
         {
           id: "r1" as any,
+          taskId: "task-1" as any,
           stageId: "stg1" as any,
-          taskRevisionId: "rev1",
+          taskRevisionId: "rev1" as any,
           type: "revoked",
           revokesApprovalId: "g1" as any,
           actor: { id: "alice", type: "user" },
@@ -282,7 +286,9 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
       id: "art-mismatch" as any,
       kind: "document", // mismatch
       valueType: "file",
+      createdBy: { id: "u1", type: "user" },
       createdAt: "2026-08-20T12:00:00.000Z",
+      updatedAt: "2026-08-20T12:00:00.000Z",
     };
     const contextMismatch: TaskArtifactContext = {
       requirements: new Map([["req-filter" as any, reqWithFilters]]),
@@ -350,7 +356,9 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
       id: "art-ver" as any,
       kind: "document",
       valueType: "file",
+      createdBy: { id: "u1", type: "user" },
       createdAt: "2026-08-20T12:00:00.000Z",
+      updatedAt: "2026-08-20T12:00:00.000Z",
     };
     const verOther: ArtifactVersion = {
       schemaVersion: "1.1",
@@ -575,7 +583,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
         profile: approvalChallengeProfile,
         scope: { type: "project", projectId: "p-chal-eval" },
         definition: { title: "Approval & Challenge Task" },
-        criteria: [{ title: "C1", required: true, state: "defined" as const }],
+        criteria: [{ title: "C1", required: true, state: "not_started" as const }],
         approvalPolicy: {
           stages: [
             {
@@ -583,8 +591,6 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
               scope: "task" as any,
               required: true,
               requiredApprovalCount: 1,
-              cardinality: "any",
-              candidates: [{ id: "lead-1", type: "user" }],
             },
           ],
         },
@@ -612,7 +618,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
     expect(evalBefore.reasons.some((r) => r.code === "incomplete_review")).toBe(true);
 
     // Resolve challenge
-    editor.challenges.resolve(chalId, "Fixed defect", { id: "dev", type: "user" });
+    editor.challenges.resolve(chalId, "no_effect", { summary: "Fixed defect", actor: { id: "dev", type: "user" } });
 
     // Complete review
     const revId = editor.reviews.request({ requestedBy: { id: "dev", type: "user" } });

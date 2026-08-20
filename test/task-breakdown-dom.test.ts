@@ -4,7 +4,6 @@ import {
   FixedBreakdownClock,
   FixedTaskClock,
   MilestoneEditor,
-  SequenceBreakdownIdGenerator,
   SequenceMilestoneIdGenerator,
   SequenceTaskIdGenerator,
   TaskDocumentBuilder,
@@ -37,14 +36,13 @@ const testMilestoneProfile: MilestoneProfile = {
   ref: { id: "profile-ms" as any, version: 1 },
   criteria: { enabled: true },
   deliverables: { enabled: true },
-  dependencies: { enabled: true },
+  dependencies: { enabled: true, participatesInGraph: true },
   revisions: { enabled: true },
   challenges: { enabled: true },
   reviews: { enabled: false, required: false },
   approvals: { enabled: false, required: false },
   completion: {
     enabled: true,
-    requiresAcceptance: true,
     closeImmediatelyOnAcceptance: false,
   },
 };
@@ -71,10 +69,10 @@ describe("Task & Breakdown DOM Read Models", () => {
         { trigger: { type: "at", date: "2026-08-24T12:00:00.000Z" } },
       ],
       criteria: [
-        { title: "Task Criterion A", required: true },
+        { title: "Task Criterion A", required: true, state: "not_started" as const },
       ],
       deliverables: [
-        { title: "Task Deliverable B", required: true },
+        { title: "Task Deliverable B", required: true, state: "missing" as const },
       ],
     };
 
@@ -168,7 +166,6 @@ describe("Task & Breakdown DOM Read Models", () => {
 
   it("constructs and queries a BreakdownDocument resolving child MilestoneDocuments", () => {
     const clock = new FixedBreakdownClock("2026-08-20T12:00:00.000Z");
-    const ids = new SequenceBreakdownIdGenerator();
 
     const child = MilestoneEditor.create(
       {

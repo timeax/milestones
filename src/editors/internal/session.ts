@@ -69,7 +69,7 @@ export interface EditorSession {
   events: MilestoneEvent[];
   invalidations: EvaluationInvalidation[];
   revision?: MilestoneRevision;
-  readonly historyState: EditorHistoryState<EditorHistorySnapshot>;
+  readonly historyState: EditorHistoryState;
   closed: boolean;
 }
 

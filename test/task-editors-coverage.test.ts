@@ -162,7 +162,7 @@ describe("Task Sub-Editors Coverage", () => {
         profile: fullProfile,
         scope: { type: "project", projectId: "p-chal" },
         definition: { title: "Challenge Test Task" },
-        criteria: [{ title: "Crit 1", required: true, state: "pending" as const }],
+        criteria: [{ title: "Crit 1", required: true, state: "not_started" as const }],
       },
       harness,
     );

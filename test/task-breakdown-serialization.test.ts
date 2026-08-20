@@ -3,7 +3,6 @@ import {
   FixedBreakdownClock,
   FixedTaskClock,
   MilestoneEditor,
-  SequenceBreakdownIdGenerator,
   SequenceMilestoneIdGenerator,
   SequenceTaskIdGenerator,
   TaskEditor,
@@ -28,8 +27,6 @@ import {
   type Breakdown,
   type BreakdownEvent,
   type MilestoneProfile,
-  type Task,
-  type TaskEvent,
   type TaskGraphSnapshot,
   type TaskProfile,
 } from "../src/index.js";
@@ -54,14 +51,13 @@ const testMilestoneProfile: MilestoneProfile = {
   ref: { id: "profile-ms-ser" as any, version: 1 },
   criteria: { enabled: true },
   deliverables: { enabled: true },
-  dependencies: { enabled: true },
+  dependencies: { enabled: true, participatesInGraph: true },
   revisions: { enabled: true },
   challenges: { enabled: true },
   reviews: { enabled: false, required: false },
   approvals: { enabled: false, required: false },
   completion: {
     enabled: true,
-    requiresAcceptance: true,
     closeImmediatelyOnAcceptance: false,
   },
 };

@@ -1307,21 +1307,55 @@ These external records remain outside the milestone package.
 ├── Editors
 └── Deterministic Evaluation
 
-depends on:
+---
 
-@elqora/artifacts
+## 28. Structured Execution Domain (Milestones, Tasks, Breakdowns)
+
+`@timeax/milestones` expands beyond singular milestones into a complete, reusable Structured Execution Domain comprising three primary top-level aggregates sharing a unified execution engine:
+
+### 28.1 The Aggregate Trio
+
+1. **Milestone** (`Milestone`):
+   - Formal planned outcome.
+   - Preserves 100% wire 1.2 backwards compatibility.
+   - Fully evaluated with strict criteria, deliverable requirements, artifact integration, reviews, approvals, challenges, acceptance ledgers, and completion ledgers.
+
+2. **Task** (`Task`):
+   - Concrete execution unit with execution-first semantics.
+   - First-class scoping: project, milestone, breakdown, or parent task.
+   - Timing model: startsAt, dueAt, completedAt, timezone, duration.
+   - Configurable reminders with relative and absolute date/time triggers.
+   - Multi-entity dependencies: tasks can depend on milestones, tasks, criteria, and deliverables.
+   - Shared execution machinery: shares criteria, deliverables, artifacts, reviews, approvals, and challenges with milestone while exposing a task-centric API.
+
+3. **Breakdown** (`Breakdown`):
+   - Milestone decomposition plan container.
+   - Decomposes one existing parent milestone into child ordinary milestones.
+   - Explicitly NOT an execution unit; child milestone completion does not auto-complete the parent milestone.
+   - Provides hierarchy queries and tree navigation.
+
+### 28.2 Architectural Layers
+
+```
+STRUCTURED EXECUTION CORE (Shared Invariants, Evaluation & State Machine)
+  ├── Common Services & Reusable Transitions (Criteria, Deliverables, Artifacts, Reviews, Approvals, Challenges)
+  ├── Aggregates & Facades
+  │     ├── Milestone & MilestoneEditor (Outcome-centric)
+  │     ├── Task & TaskEditor (Execution-centric)
+  │     └── Breakdown & BreakdownEditor (Decomposition plan)
+  ├── Multi-Entity Dependency & Scope Graphs
+  ├── DOM Read Models (MilestoneDocument, TaskDocument, BreakdownDocument)
+  └── Wire Serialization & Migrations (1.0 -> 1.1 -> 1.2 -> 2.0)
 ```
 
-The package defines milestone internal truth and lifecycle.
+The package defines structured execution internal truth and lifecycle.
 
-Stable IDs make milestone-domain objects composable.
+Stable IDs make execution-domain objects composable.
 
 Immutable revisions and ledgers preserve historical truth.
 
-`@elqora/artifacts` provides the canonical artifact protocol used for milestone Sources, deliverables, evidence, submissions, verification, and historical artifact-version references. In this package, “Source” always means the milestone-domain use of an Artifact through a canonical Artifact Link; Artifact Protocol `ArtifactSource` remains the Artifact's own provenance and transport concept.
+`@elqora/artifacts` provides the canonical artifact protocol used for Sources, deliverables, evidence, submissions, verification, and historical artifact-version references.
 
 Explicit graph and evaluation inputs keep behavior deterministic.
 
-Strict host boundaries keep the package reusable.
-
-The package remains intentionally unaware of projects, tasks, issues, discussions, version planning, authorization, persistence, GitHub, `.pm/`, databases, storage providers, and UI.
+Strict host boundaries keep the package reusable across CLI, UI, microservices, and storage layers.

@@ -53,10 +53,10 @@ describe("Task Domain & TaskEditor", () => {
         { trigger: { type: "before_due", durationMinutes: 60 }, metadata: { channel: "slack" } },
       ],
       criteria: [
-        { title: "Criterion 1", required: true, state: "pending" as const },
+        { title: "Criterion 1", required: true, state: "not_started" as const },
       ],
       deliverables: [
-        { title: "Deliverable 1", required: true, state: "pending" as const },
+        { title: "Deliverable 1", required: true, state: "missing" as const },
       ],
       approvalPolicy: {
         stages: [
