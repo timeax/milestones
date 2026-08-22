@@ -128,9 +128,9 @@ export interface TaskTiming {
 }
 
 export type TaskReminderTrigger =
-  | { readonly type: "at"; readonly at?: string; readonly date?: string }
-  | { readonly type: "before_due"; readonly duration?: string; readonly durationMinutes?: number }
-  | { readonly type: "after_start"; readonly duration?: string; readonly durationMinutes?: number };
+  | { readonly type: "at"; readonly at: string }
+  | { readonly type: "before_due"; readonly duration: string }
+  | { readonly type: "after_start"; readonly duration: string };
 
 export interface TaskReminder {
   readonly id: TaskReminderId;
@@ -390,14 +390,43 @@ export interface TaskDependencyAcceptanceSnapshot {
   readonly satisfied: boolean;
 }
 
+export interface TaskChallengeAcceptanceSnapshot {
+  readonly id: ChallengeId;
+  readonly target: TaskChallengeTarget;
+  readonly severity: "non_blocking" | "blocking";
+  readonly state: ChallengeState;
+  readonly resolution?: TaskChallengeResolution;
+  readonly blocking: boolean;
+  readonly evidence: readonly import("./domain.js").ChallengeEvidenceAcceptanceSnapshot[];
+}
+
+export interface TaskReviewAcceptanceSnapshot {
+  readonly id: ReviewId;
+  readonly taskRevisionId: TaskRevisionId;
+  readonly state: ReviewState;
+  readonly result?: ReviewResult;
+  readonly artifactVersionIds: readonly ArtifactVersionId[];
+  readonly satisfied: boolean;
+}
+
+export interface TaskApprovalAcceptanceSnapshot {
+  readonly stageId: ApprovalStageId;
+  readonly taskRevisionId: TaskRevisionId;
+  readonly effectiveApprovalCount: number;
+  readonly requiredApprovalCount: number;
+  readonly satisfied: boolean;
+  readonly waived: boolean;
+  readonly actorIds: readonly string[];
+}
+
 export interface TaskAcceptanceSnapshot {
   readonly revisionId: TaskRevisionId;
   readonly criteria: readonly import("./domain.js").CriterionAcceptanceSnapshot[];
   readonly deliverables: readonly import("./domain.js").DeliverableAcceptanceSnapshot[];
   readonly dependencies: readonly TaskDependencyAcceptanceSnapshot[];
-  readonly challenges: readonly import("./domain.js").ChallengeAcceptanceSnapshot[];
-  readonly reviews: readonly import("./domain.js").ReviewAcceptanceSnapshot[];
-  readonly approvals: readonly import("./domain.js").ApprovalAcceptanceSnapshot[];
+  readonly challenges: readonly TaskChallengeAcceptanceSnapshot[];
+  readonly reviews: readonly TaskReviewAcceptanceSnapshot[];
+  readonly approvals: readonly TaskApprovalAcceptanceSnapshot[];
   readonly artifacts: readonly import("./domain.js").ArtifactEvaluationSnapshot[];
   readonly sources?: readonly TaskSourceSnapshot[];
 }
@@ -527,7 +556,7 @@ export type TaskReviewRequestedEvent = TaskEventBase<"task.review_requested", { 
 export type TaskReviewChangedEvent = TaskEventBase<"task.review_changed", { readonly reviewId: ReviewId; readonly state: ReviewState }>;
 export type TaskReviewCompletedEvent = TaskEventBase<"task.review_completed", { readonly reviewId: ReviewId; readonly result: ReviewResult }>;
 export type TaskApprovalRecordedEvent = TaskEventBase<"task.approval_recorded", { readonly record: TaskApprovalRecord }>;
-export type TaskApprovalRevokedEvent = TaskEventBase<"task.approval_revoked", { readonly record: import("./domain.js").ApprovalRevokedRecord }>;
+export type TaskApprovalRevokedEvent = TaskEventBase<"task.approval_revoked", { readonly record: TaskApprovalRevokedRecord }>;
 export type TaskApprovalStageAddedEvent = TaskEventBase<"task.approval_stage_added", { readonly stage: ApprovalStage }>;
 export type TaskApprovalStageChangedEvent = TaskEventBase<"task.approval_stage_changed", { readonly stage: ApprovalStage }>;
 export type TaskApprovalStageRemovedEvent = TaskEventBase<"task.approval_stage_removed", { readonly approvalStageId: ApprovalStageId }>;

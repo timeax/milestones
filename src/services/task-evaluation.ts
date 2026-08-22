@@ -1,5 +1,4 @@
 import type {
-  ApprovalAcceptanceSnapshot,
   ApprovalStage,
   ArtifactEvaluationSnapshot,
   DerivedTaskState,
@@ -11,7 +10,9 @@ import type {
   TaskCompletionEvaluation,
   TaskEvaluationPolicySnapshot,
   TaskProfile,
+  TaskApprovalAcceptanceSnapshot,
 } from "../model/domain.js";
+import { invariant } from "../model/errors.js";
 import {
   calculateProgressGeneric,
   dedupeReasons,
@@ -19,7 +20,7 @@ import {
   evaluateArtifacts,
 } from "./execution-evaluation.js";
 import { resolveChallengeEvidenceSources } from "./challenge-evidence.js";
-import { resolveSources, sourceLinksForRevision } from "./sources.js";
+import { resolveTaskSources, sourceLinksForTaskRevision } from "./sources.js";
 import { evaluateTaskDependencies, type ExecutionDependencyResolver, type TaskGraphSnapshot } from "./task-graph.js";
 
 export function defaultTaskEvaluationPolicy(profile: TaskProfile): TaskEvaluationPolicySnapshot {
@@ -40,7 +41,7 @@ export function defaultTaskEvaluationPolicy(profile: TaskProfile): TaskEvaluatio
 
 export function currentTaskPolicy(task: Task): TaskEvaluationPolicySnapshot {
   const revision = task.revisions.find((item) => item.id === task.currentRevisionId);
-  if (revision === undefined) throw new Error(`Current revision ${task.currentRevisionId} is missing`);
+  invariant(revision !== undefined, "INVALID_ARGUMENT", `Current revision ${task.currentRevisionId} is missing`);
   return revision.snapshot.evaluationPolicy;
 }
 
@@ -59,18 +60,17 @@ export function deriveTaskState(task: Task): DerivedTaskState {
   return "open";
 }
 
-export function evaluateTaskApprovalStage(task: Task, stage: ApprovalStage): ApprovalAcceptanceSnapshot {
+export function evaluateTaskApprovalStage(task: Task, stage: ApprovalStage): TaskApprovalAcceptanceSnapshot {
   const actorIds = effectiveApprovalActorsGeneric(task.approvalRecords, stage.id, task.currentRevisionId);
   const waived = task.approvalRecords.some(
     (record) =>
       record.type === "waived" &&
       record.stageId === stage.id &&
-      ((record as { taskRevisionId?: string }).taskRevisionId === task.currentRevisionId ||
-        (record as { milestoneRevisionId?: string }).milestoneRevisionId === task.currentRevisionId),
+      record.taskRevisionId === task.currentRevisionId,
   );
   return {
     stageId: stage.id,
-    milestoneRevisionId: task.currentRevisionId as unknown as import("../model/domain.js").MilestoneRevisionId,
+    taskRevisionId: task.currentRevisionId,
     effectiveApprovalCount: actorIds.length,
     requiredApprovalCount: stage.requiredApprovalCount,
     satisfied: !stage.required || waived || actorIds.length >= stage.requiredApprovalCount,
@@ -167,7 +167,7 @@ export function evaluateTaskAcceptance(
         });
       }
       const evidence = challenge.evidence.map((item) => {
-        const resolution = resolveChallengeEvidenceSources(item as unknown as import("../model/domain.js").ChallengeEvidence, artifacts as unknown as import("../model/domain.js").MilestoneArtifactContext);
+        const resolution = resolveChallengeEvidenceSources(item, artifacts);
         return {
           id: item.id,
           kind: item.kind,
@@ -181,10 +181,10 @@ export function evaluateTaskAcceptance(
       });
       return {
         id: challenge.id,
-        target: structuredClone(challenge.target) as unknown as import("../model/domain.js").ChallengeTarget,
+        target: structuredClone(challenge.target),
         severity: challenge.severity,
         state: challenge.state,
-        ...(challenge.resolution === undefined ? {} : { resolution: structuredClone(challenge.resolution) as unknown as import("../model/domain.js").ChallengeResolution }),
+        ...(challenge.resolution === undefined ? {} : { resolution: structuredClone(challenge.resolution) }),
         blocking,
         evidence,
       };
@@ -194,7 +194,7 @@ export function evaluateTaskAcceptance(
     .filter((review) => review.taskRevisionId === task.currentRevisionId)
     .map((review) => ({
       id: review.id,
-      milestoneRevisionId: review.taskRevisionId as unknown as import("../model/domain.js").MilestoneRevisionId,
+      taskRevisionId: review.taskRevisionId,
       state: review.state,
       ...(review.result === undefined ? {} : { result: review.result }),
       artifactVersionIds: [...(review.artifactVersionIds ?? [])],
@@ -234,15 +234,21 @@ export function evaluateTaskAcceptance(
       reviews,
       approvals,
       artifacts: artifactSnapshots,
-      sources: resolveSources(
-        sourceLinksForRevision(task as unknown as import("../model/domain.js").Milestone, task.currentRevisionId) as unknown as import("../model/domain.js").MilestoneSourceLink[],
-        artifacts as unknown as import("../model/domain.js").MilestoneArtifactContext,
-      ) as unknown as import("../model/domain.js").TaskSourceSnapshot[],
+      sources: resolveTaskSources(
+        sourceLinksForTaskRevision(task, task.currentRevisionId),
+        artifacts,
+      ),
     },
   };
 }
 
-export function evaluateTaskCompletion(task: Task, profile: TaskProfile): TaskCompletionEvaluation {
+export function evaluateTaskCompletion(
+  task: Task,
+  profile: TaskProfile,
+  graph?: TaskGraphSnapshot | ExecutionDependencyResolver,
+  artifacts?: TaskArtifactContext,
+): TaskCompletionEvaluation {
+  const policy = currentTaskPolicy(task);
   const reasons: EvaluationReason[] = [];
   if (!profile.completion.enabled) {
     reasons.push({
@@ -252,7 +258,7 @@ export function evaluateTaskCompletion(task: Task, profile: TaskProfile): TaskCo
     });
   }
 
-  if (profile.completion.requiresAcceptance) {
+  if (policy.completionRequiresCurrentAcceptance) {
     const currentAcceptance =
       task.currentAcceptanceId === undefined
         ? undefined
@@ -266,7 +272,7 @@ export function evaluateTaskCompletion(task: Task, profile: TaskProfile): TaskCo
     }
   } else {
     // For simple tasks without formal acceptance, evaluate requirements directly
-    const acceptanceEval = evaluateTaskAcceptance(task, profile);
+    const acceptanceEval = evaluateTaskAcceptance(task, profile, graph, artifacts);
     reasons.push(...acceptanceEval.reasons);
   }
 

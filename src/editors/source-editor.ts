@@ -21,7 +21,7 @@ import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/rev
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 interface SourceTarget {
@@ -29,13 +29,23 @@ interface SourceTarget {
   readonly id: string;
 }
 
-export class MilestoneSourceEditor {
+interface SourceContainer<TSourceLink> {
+  readonly sourceLinks?: readonly TSourceLink[];
+}
+
+/** Drafts are deep-cloned mutable working copies even though domain records expose readonly arrays. */
+function mutableSourceLinks<TSourceLink>(container: SourceContainer<TSourceLink>): TSourceLink[] {
+  const draftContainer = container as { sourceLinks?: TSourceLink[] };
+  return (draftContainer.sourceLinks ??= []);
+}
+
+export class SourceEditor {
   public constructor(private readonly session: EditorSession | TaskEditorSession) {}
 
   public attach(source: MilestoneSourceLink | TaskSourceLink, actor?: ActorRef): void {
     ensureOpen(this.session);
-    assertValidSourceLink(source as any);
-    this.assertOwned(source);
+    assertValidSourceLink(source);
+    this.assertOwned(source.subject);
     const isTask = isTaskSession(this.session);
     if (source.subject.type === "milestone_revision" || source.subject.type === "task_revision") {
       invariant(
@@ -60,12 +70,12 @@ export class MilestoneSourceEditor {
     this.materialIfNeeded(source, undefined, actor);
     const links = this.links(source.subject);
     invariant(!links.some((item) => item.id === source.id), "DUPLICATE_ID", `Source link ${source.id} already exists`);
-    links.push(clone(source) as any);
+    links.push(clone(source));
     this.changed(source.id);
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.source_attached", { source: clone(source) as any }, actor);
+      emitTask(this.session as TaskEditorSession, "task.source_attached", { source: clone(source) as TaskSourceLink }, actor);
     } else {
-      emit(this.session as EditorSession, "source.attached", { source: clone(source) as any }, actor);
+      emit(this.session as EditorSession, "source.attached", { source: clone(source) as MilestoneSourceLink }, actor);
     }
   }
 
@@ -77,13 +87,13 @@ export class MilestoneSourceEditor {
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "source.remove", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as TaskSourceLink["subject"],
         linkId,
       });
     } else {
       authorize(this.session as EditorSession, "source.remove", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as MilestoneSourceLink["subject"],
         linkId,
       });
     }
@@ -91,40 +101,40 @@ export class MilestoneSourceEditor {
     found.links.splice(found.index, 1);
     this.changed(linkId);
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.source_detached", { linkId, subject: clone(found.link.subject) as any }, actor);
+      emitTask(this.session as TaskEditorSession, "task.source_detached", { linkId, subject: clone(found.link.subject) as TaskSourceLink["subject"] }, actor);
     } else {
-      emit(this.session as EditorSession, "source.detached", { linkId, subject: clone(found.link.subject) as any }, actor);
+      emit(this.session as EditorSession, "source.detached", { linkId, subject: clone(found.link.subject) as MilestoneSourceLink["subject"] }, actor);
     }
   }
 
   public replace(linkId: ArtifactLinkId, source: MilestoneSourceLink | TaskSourceLink, actor?: ActorRef): void {
     ensureOpen(this.session);
-    assertValidSourceLink(source as any);
+    assertValidSourceLink(source);
     const found = this.find(linkId);
     this.assertMutableSubject(found.link.subject);
-    invariant(sourceSubjectOwnsLink(source as any, found.link.subject as any), "INVALID_ARGUMENT", "Replacement Source must keep the same subject");
+    invariant(sourceSubjectOwnsLink(source, found.link.subject), "INVALID_ARGUMENT", "Replacement Source must keep the same subject");
     const isTask = isTaskSession(this.session);
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "source.replace", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as TaskSourceLink["subject"],
         linkId,
       });
     } else {
       authorize(this.session as EditorSession, "source.replace", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as MilestoneSourceLink["subject"],
         linkId,
       });
     }
     this.materialIfNeeded(source, found.link, actor);
-    found.links[found.index] = clone(source) as any;
+    found.links[found.index] = clone(source);
     this.changed(linkId);
     this.changed(source.id);
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.source_replaced", { previousLinkId: linkId, source: clone(source) as any }, actor);
+      emitTask(this.session as TaskEditorSession, "task.source_replaced", { previousLinkId: linkId, source: clone(source) as TaskSourceLink }, actor);
     } else {
-      emit(this.session as EditorSession, "source.replaced", { previousLinkId: linkId, source: clone(source) as any }, actor);
+      emit(this.session as EditorSession, "source.replaced", { previousLinkId: linkId, source: clone(source) as MilestoneSourceLink }, actor);
     }
   }
 
@@ -137,13 +147,13 @@ export class MilestoneSourceEditor {
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "source.change_role", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as TaskSourceLink["subject"],
         linkId,
       });
     } else {
       authorize(this.session as EditorSession, "source.change_role", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as MilestoneSourceLink["subject"],
         linkId,
       });
     }
@@ -171,13 +181,13 @@ export class MilestoneSourceEditor {
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "source.update", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as TaskSourceLink["subject"],
         linkId,
       });
     } else {
       authorize(this.session as EditorSession, "source.update", actor, {
         type: "source",
-        subject: found.link.subject as any,
+        subject: found.link.subject as MilestoneSourceLink["subject"],
         linkId,
       });
     }
@@ -188,7 +198,7 @@ export class MilestoneSourceEditor {
       .filter((key) => !equalDomainValue(source[key], found.link[key]))
       .map((key) => (key === "artifactVersionId" ? "artifact_version" : key));
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.source_changed", { source: clone(source) as any, changed: changed as any }, actor);
+      emitTask(this.session as TaskEditorSession, "task.source_changed", { source: clone(source) as TaskSourceLink, changed }, actor);
     } else {
       emit(this.session as EditorSession, "source.changed", { source: clone(source), changed }, actor);
     }
@@ -209,7 +219,7 @@ export class MilestoneSourceEditor {
     previous: MilestoneSourceLink | TaskSourceLink | undefined,
     actor?: ActorRef,
   ): void {
-    if ((next !== undefined && isDefinitionBearing(next as any)) || (previous !== undefined && isDefinitionBearing(previous as any))) {
+    if ((next !== undefined && isDefinitionBearing(next)) || (previous !== undefined && isDefinitionBearing(previous))) {
       if (isTaskSession(this.session)) {
         beginMaterialTaskRevision(this.session, "Definition-bearing Source changed", actor);
       } else {
@@ -222,45 +232,51 @@ export class MilestoneSourceEditor {
     this.session.changes.push({ type: "source_changed", linkId });
   }
 
-  private assertOwned(link: MilestoneSourceLink | TaskSourceLink): void {
-    const subject = link.subject;
+  private assertOwned(subject: SourceTarget): void {
     if (subject.type === "milestone" || subject.type === "task") {
       invariant(subject.id === this.session.draft.id, "INVALID_ARGUMENT", "Source does not belong to this aggregate");
     } else if (subject.type === "milestone_revision" || subject.type === "task_revision") {
       invariant(
-        this.session.revision?.id === subject.id || (this.session.draft.revisions as any[]).some((item) => item.id === subject.id),
+        this.session.revision?.id === subject.id || this.session.draft.revisions.some((item) => item.id === subject.id),
         "INVALID_ARGUMENT",
         "Revision Sources must target a revision of this aggregate",
       );
     } else if (subject.type === "criterion") {
-      invariant((this.session.draft.criteria as any[]).some((item) => item.id === subject.id), "NOT_FOUND", "Source criterion does not exist");
+      invariant(this.session.draft.criteria.some((item) => item.id === subject.id), "NOT_FOUND", "Source criterion does not exist");
     } else if (subject.type === "deliverable_requirement") {
-      invariant((this.session.draft.deliverables as any[]).some((item) => item.id === subject.id), "NOT_FOUND", "Source deliverable does not exist");
+      invariant(this.session.draft.deliverables.some((item) => item.id === subject.id), "NOT_FOUND", "Source deliverable does not exist");
     } else if (subject.type === "challenge") {
-      invariant((this.session.draft.challenges as any[]).some((item) => item.id === subject.id), "NOT_FOUND", "Source challenge does not exist");
+      invariant(this.session.draft.challenges.some((item) => item.id === subject.id), "NOT_FOUND", "Source challenge does not exist");
     } else {
-      invariant((this.session.draft.reviews as any[]).some((item) => item.id === subject.id), "NOT_FOUND", "Source review does not exist");
+      invariant(this.session.draft.reviews.some((item) => item.id === subject.id), "NOT_FOUND", "Source review does not exist");
     }
   }
 
   private links(subject: SourceTarget): (MilestoneSourceLink | TaskSourceLink)[] {
-    this.assertOwned({ subject } as any);
-    if (subject.type === "milestone" || subject.type === "task") {
-      return ((this.session.draft as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
-    }
-    if (subject.type === "milestone_revision" || subject.type === "task_revision") {
-      return (((this.session.draft.revisions as any[]).find((item) => item.id === subject.id)! as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
-    }
-    if (subject.type === "criterion") {
-      return (((this.session.draft.criteria as any[]).find((item) => item.id === subject.id)! as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
-    }
-    if (subject.type === "deliverable_requirement") {
-      return (((this.session.draft.deliverables as any[]).find((item) => item.id === subject.id)! as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
-    }
-    if (subject.type === "challenge") {
-      return (((this.session.draft.challenges as any[]).find((item) => item.id === subject.id)! as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
-    }
-    return (((this.session.draft.reviews as any[]).find((item) => item.id === subject.id)! as unknown as { sourceLinks?: any[] }).sourceLinks ??= []);
+    this.assertOwned(subject);
+    return isTaskSession(this.session)
+      ? this.taskLinks(this.session, subject)
+      : this.milestoneLinks(this.session, subject);
+  }
+
+  private taskLinks(session: TaskEditorSession, subject: SourceTarget): TaskSourceLink[] {
+    invariant(subject.type !== "milestone" && subject.type !== "milestone_revision", "INVALID_ARGUMENT", "Milestone Source subject cannot belong to a Task");
+    if (subject.type === "task") return mutableSourceLinks(session.draft);
+    if (subject.type === "task_revision") return mutableSourceLinks(session.draft.revisions.find((item) => item.id === subject.id)!);
+    if (subject.type === "criterion") return mutableSourceLinks(session.draft.criteria.find((item) => item.id === subject.id)!);
+    if (subject.type === "deliverable_requirement") return mutableSourceLinks(session.draft.deliverables.find((item) => item.id === subject.id)!);
+    if (subject.type === "challenge") return mutableSourceLinks(session.draft.challenges.find((item) => item.id === subject.id)!);
+    return mutableSourceLinks(session.draft.reviews.find((item) => item.id === subject.id)!);
+  }
+
+  private milestoneLinks(session: EditorSession, subject: SourceTarget): MilestoneSourceLink[] {
+    invariant(subject.type !== "task" && subject.type !== "task_revision", "INVALID_ARGUMENT", "Task Source subject cannot belong to a Milestone");
+    if (subject.type === "milestone") return mutableSourceLinks(session.draft);
+    if (subject.type === "milestone_revision") return mutableSourceLinks(session.draft.revisions.find((item) => item.id === subject.id)!);
+    if (subject.type === "criterion") return mutableSourceLinks(session.draft.criteria.find((item) => item.id === subject.id)!);
+    if (subject.type === "deliverable_requirement") return mutableSourceLinks(session.draft.deliverables.find((item) => item.id === subject.id)!);
+    if (subject.type === "challenge") return mutableSourceLinks(session.draft.challenges.find((item) => item.id === subject.id)!);
+    return mutableSourceLinks(session.draft.reviews.find((item) => item.id === subject.id)!);
   }
 
   private find(linkId: ArtifactLinkId): {
@@ -286,8 +302,9 @@ export class MilestoneSourceEditor {
   }
 }
 
-export const SourceEditor = MilestoneSourceEditor;
-export type TaskSourceEditor = MilestoneSourceEditor;
-export function createSourceEditor(session: EditorSession | TaskEditorSession): MilestoneSourceEditor {
-  return new MilestoneSourceEditor(session);
+/** @deprecated Use SourceEditor. */
+export { SourceEditor as MilestoneSourceEditor };
+export type TaskSourceEditor = SourceEditor;
+export function createSourceEditor(session: EditorSession | TaskEditorSession): SourceEditor {
+  return new SourceEditor(session);
 }

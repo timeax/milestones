@@ -1,276 +1,121 @@
+import type { ArtifactLinkId } from "@elqora/artifacts";
 import type {
-  ProgressResult,
-  Task,
-  TaskAcceptanceEvaluation,
-  TaskArtifactContext,
-  TaskCompletionEvaluation,
-  TaskId,
-  TaskProfile,
-  TaskProfileId,
-  TaskReminder,
-  TaskReminderId,
-  TaskReminderTrigger,
-  TaskScope,
-  TaskTiming,
+  ApprovalStage, ChallengeId, CriterionId, DeliverableRequirementId, DependencyId,
+  EvaluationReason, JsonValue, ProgressResult, ReviewId, Task, TaskAcceptanceEvaluation,
+  TaskApprovalRecord, TaskArtifactContext, TaskChallenge, TaskCompletionEvaluation,
+  TaskCriterion, TaskDefinition, TaskDeliverableRequirement, TaskDependency, TaskId,
+  TaskProfile, TaskProfileId, TaskReminder, TaskReminderId, TaskReminderTrigger, TaskReview,
+  TaskRevision, TaskRevisionId, TaskScope, TaskSourceLink, TaskSourceRole,
+  TaskSourceSubjectType, TaskTiming,
 } from "../model/domain.js";
-import {
-  calculateTaskProgress,
-  deriveTaskState,
-  evaluateTaskAcceptance,
-  evaluateTaskCompletion,
-} from "../services/task-evaluation.js";
+import { invariant } from "../model/errors.js";
+import { calculateTaskProgress, deriveTaskState, evaluateTaskAcceptance, evaluateTaskCompletion } from "../services/task-evaluation.js";
+import { evaluateTaskDependency, type TaskGraphSnapshot } from "../services/task-graph.js";
+import { sourceLinksForTaskRevision } from "../services/sources.js";
 import { assertValidTask, assertValidTaskProfile } from "../services/validation.js";
-import type { TaskGraphSnapshot } from "../services/task-graph.js";
-import {
-  createCriteriaDocument,
-  createDefinitionDocument,
-  createDeliverablesDocument,
-  createProgressDocument,
-  createSourcesDocument,
-} from "./documents/index.js";
-import type {
-  CriteriaDocument,
-  DeliverablesDocument,
-  MilestoneDefinitionDocument,
-  MilestoneProgressDocument,
-  MilestoneSourcesDocument,
-  TextDocument,
-} from "./types.js";
+import { createTextDocument } from "./documents/text.js";
+import type { TextDocument } from "./types.js";
 
-export interface TaskDocumentContext {
-  readonly task: Task;
-  readonly profile: TaskProfile;
-  readonly graph?: TaskGraphSnapshot;
-  readonly artifacts?: TaskArtifactContext;
+export interface TaskDocumentContext { readonly task: Task; readonly profile: TaskProfile; readonly graph?: TaskGraphSnapshot; readonly artifacts?: TaskArtifactContext }
+export type TaskDocumentBuildInput = TaskDocumentContext;
+export interface TaskProfileDocument { getId(): TaskProfileId; getVersion(): number; hasCriteria(): boolean; hasDeliverables(): boolean; hasDependencies(): boolean; participatesInGraph(): boolean; hasRevisions(): boolean; hasChallenges(): boolean; hasReviews(): boolean; requiresReviews(): boolean; hasApprovals(): boolean; requiresApprovals(): boolean; hasCompletion(): boolean; requiresAcceptance(): boolean; closeImmediatelyOnAcceptance(): boolean }
+export interface TaskDefinitionDocument { getTitle(): string; getKey(): string | undefined; getDescription(): TextDocument; hasDescription(): boolean; getMetadata(): Readonly<Record<string, JsonValue>>; getMetadataValue(key: string): JsonValue | undefined; hasMetadata(key: string): boolean; toObject(): TaskDefinition }
+export interface TaskTimingDocument { getStartsAt(): string | undefined; getDueAt(): string | undefined; getTimeZone(): string | undefined; hasStart(): boolean; hasDueDate(): boolean; isScheduled(): boolean; hasStarted(asOf: string): boolean; isOverdue(asOf: string): boolean; getRemainingMilliseconds(asOf: string): number | undefined; toObject(): TaskTiming | undefined }
+export interface TaskReminderDocument { readonly id: TaskReminderId; getId(): TaskReminderId; getTrigger(): TaskReminderTrigger; getCreatedAt(): string; getMetadata(): Readonly<Record<string, JsonValue>> | undefined; getScheduledAt(timing: TaskTiming | undefined): string | undefined; toObject(): TaskReminder }
+export interface TaskRemindersDocument { list(): readonly TaskReminderDocument[]; get(id: TaskReminderId): TaskReminderDocument | undefined; has(id: TaskReminderId): boolean; hasReminders(): boolean; getByTriggerType(type: TaskReminderTrigger["type"]): readonly TaskReminderDocument[]; count(): number }
+export interface TaskScopeDocument { readonly type: TaskScope["type"]; getProjectId(): string | undefined; getMilestoneId(): import("../model/domain.js").MilestoneId | undefined; getBreakdownId(): import("../model/domain.js").BreakdownId | undefined; getParentTaskId(): TaskId | undefined; getTaskId(): TaskId | undefined; toObject(): TaskScope }
+export interface TaskProgressDocument { getCompletedWeight(): number; getTotalWeight(): number; getPercentage(): number; isComplete(): boolean; toObject(): ProgressResult }
+export interface TaskOverviewDocument { getId(): TaskId; getState(): ReturnType<typeof deriveTaskState>; getScope(): TaskScope; getTitle(): string; getDescription(): string | undefined; getSequence(): number; getCurrentRevisionId(): TaskRevisionId; getCreatedAt(): string; getUpdatedAt(): string | undefined; getProgress(): ProgressResult; getProgressPercentage(): number; isBlocked(): boolean; isAccepted(): boolean; isCompleted(): boolean; getOpenChallengeCount(): number; getBlockingChallengeCount(): number; getRequiredCriterionCount(): number; getSatisfiedRequiredCriterionCount(): number; getSatisfiedCriterionCount(): number; getRequiredDeliverableCount(): number; getSatisfiedRequiredDeliverableCount(): number; getSatisfiedDeliverableCount(): number; getStartsAt(): string | undefined; getDueAt(): string | undefined; getSourceCounts(): { readonly direct: number; readonly total: number }; getSourceCount(): number }
+export interface TaskCriteriaDocument { list(): readonly TaskCriterion[]; get(id: CriterionId): TaskCriterion | undefined; getRequired(): readonly TaskCriterion[]; getUnsatisfied(): readonly TaskCriterion[]; getCount(): number }
+export interface TaskDeliverablesDocument { list(): readonly TaskDeliverableRequirement[]; get(id: DeliverableRequirementId): TaskDeliverableRequirement | undefined; getRequired(): readonly TaskDeliverableRequirement[]; getUnsatisfied(): readonly TaskDeliverableRequirement[]; getCount(): number }
+export interface TaskDependencyDocument { getId(): DependencyId; getTarget(): TaskDependency["dependsOn"]; getGate(): TaskDependency["gate"]; isBlocking(): boolean; isSatisfied(): boolean | undefined; getFailureReason(): EvaluationReason | undefined; toObject(): TaskDependency }
+export interface TaskDependenciesDocument { list(): readonly TaskDependencyDocument[]; get(id: DependencyId): TaskDependencyDocument | undefined; getBlocking(): readonly TaskDependencyDocument[]; getUnsatisfied(): readonly TaskDependencyDocument[]; getUnknown(): readonly TaskDependencyDocument[]; getCount(): number }
+export interface TaskReadinessDocument { canEvaluate(): boolean; isReady(): boolean; isBlocked(): boolean; getBlockingDependencyCount(): number; getBlockingChallengeCount(): number; getUnknownDependencyCount(): number; getReasons(): readonly EvaluationReason[]; getDependencies(): TaskDependenciesDocument }
+export interface TaskSourcesDocument { list(): readonly TaskSourceLink[]; get(id: ArtifactLinkId): TaskSourceLink | undefined; getByRole(role: TaskSourceRole): readonly TaskSourceLink[]; getBySubject(type: TaskSourceSubjectType, id: string): readonly TaskSourceLink[]; getCount(): number }
+export interface TaskChallengesDocument { list(): readonly TaskChallenge[]; get(id: ChallengeId): TaskChallenge | undefined; getOpen(): readonly TaskChallenge[]; getBlocking(): readonly TaskChallenge[]; getCurrentRevision(): readonly TaskChallenge[]; getCount(): number }
+export interface TaskReviewsDocument { list(): readonly TaskReview[]; get(id: ReviewId): TaskReview | undefined; getCurrentRevision(): readonly TaskReview[]; getCompleted(): readonly TaskReview[]; getCount(): number }
+export interface TaskApprovalsDocument { getStages(): readonly ApprovalStage[]; getRecords(): readonly TaskApprovalRecord[]; getRecordsForCurrentRevision(): readonly TaskApprovalRecord[]; getPendingStages(): readonly ApprovalStage[] }
+export interface TaskRevisionsDocument { list(): readonly TaskRevision[]; get(id: TaskRevisionId): TaskRevision | undefined; getCurrent(): TaskRevision; getPrevious(): TaskRevision | undefined; getCount(): number }
+export interface TaskAcceptanceStatusDocument { isAccepted(): boolean; getCurrent(): Task["acceptanceRecords"][number] | undefined; getHistory(): Task["acceptanceRecords"]; getEvaluation(): TaskAcceptanceEvaluation }
+export interface TaskCompletionStatusDocument { isCompleted(): boolean; getCurrent(): Task["completionRecords"][number] | undefined; getHistory(): Task["completionRecords"]; getEvaluation(): TaskCompletionEvaluation }
+
+const clone = <T>(value: T): T => structuredClone(value);
+const openChallenge = (value: TaskChallenge): boolean => value.state === "open" || value.state === "under_review" || value.state === "reopened";
+const parseTimestamp = (value: string, label: string): number => { const result = Date.parse(value); invariant(Number.isFinite(result), "INVALID_ARGUMENT", `${label} must be a valid timestamp`); return result };
+const parseDuration = (value: string): number => { const match = /^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/u.exec(value); invariant(match !== null && match.slice(1).some(Boolean), "INVALID_ARGUMENT", "Reminder duration must be a supported ISO 8601 duration"); return ((Number(match[1] ?? 0) * 24 + Number(match[2] ?? 0)) * 3600 + Number(match[3] ?? 0) * 60 + Number(match[4] ?? 0)) * 1000 };
+
+class ProfileDocument implements TaskProfileDocument {
+  constructor(private readonly value: TaskProfile) {}
+  getId() { return this.value.ref.id } getVersion() { return this.value.ref.version }
+  hasCriteria() { return this.value.criteria.enabled } hasDeliverables() { return this.value.deliverables.enabled }
+  hasDependencies() { return this.value.dependencies.enabled } participatesInGraph() { return this.value.dependencies.participatesInGraph }
+  hasRevisions() { return this.value.revisions.enabled } hasChallenges() { return this.value.challenges.enabled }
+  hasReviews() { return this.value.reviews.enabled } requiresReviews() { return this.value.reviews.enabled && this.value.reviews.required }
+  hasApprovals() { return this.value.approvals.enabled } requiresApprovals() { return this.value.approvals.enabled && this.value.approvals.required }
+  hasCompletion() { return this.value.completion.enabled } requiresAcceptance() { return this.value.completion.requiresAcceptance }
+  closeImmediatelyOnAcceptance() { return this.value.completion.closeImmediatelyOnAcceptance }
 }
-
-export interface TaskDocumentBuildInput {
-  readonly task: Task;
-  readonly profile: TaskProfile;
-  readonly graph?: TaskGraphSnapshot;
-  readonly artifacts?: TaskArtifactContext;
+class DefinitionDocument implements TaskDefinitionDocument {
+  readonly #description: TextDocument; constructor(private readonly value: TaskDefinition) { this.#description = createTextDocument(value.description) }
+  getTitle() { return this.value.title } getKey() { return this.value.key } getDescription() { return this.#description }
+  hasDescription() { return !this.#description.isEmpty() } getMetadata() { return this.value.metadata ?? {} }
+  getMetadataValue(key: string) { return this.value.metadata?.[key] } hasMetadata(key: string) { return Object.hasOwn(this.value.metadata ?? {}, key) }
+  toObject() { return clone(this.value) }
 }
-
-export interface TaskProfileDocument {
-  getId(): TaskProfileId;
-  getVersion(): number;
-  hasCriteria(): boolean;
-  hasDeliverables(): boolean;
-  hasDependencies(): boolean;
-  hasRevisions(): boolean;
-  hasChallenges(): boolean;
-  hasReviews(): boolean;
-  requiresReviews(): boolean;
-  hasApprovals(): boolean;
-  requiresApprovals(): boolean;
-  hasCompletion(): boolean;
-  requiresAcceptance(): boolean;
-  closeImmediatelyOnAcceptance(): boolean;
+class TimingDocument implements TaskTimingDocument {
+  constructor(private readonly value?: TaskTiming) {} getStartsAt() { return this.value?.startsAt } getDueAt() { return this.value?.dueAt } getTimeZone() { return this.value?.timeZone }
+  hasStart() { return this.value?.startsAt !== undefined } hasDueDate() { return this.value?.dueAt !== undefined } isScheduled() { return this.hasStart() || this.hasDueDate() }
+  hasStarted(asOf: string) { return this.value?.startsAt !== undefined && parseTimestamp(asOf, "asOf") >= parseTimestamp(this.value.startsAt, "startsAt") }
+  isOverdue(asOf: string) { return this.value?.dueAt !== undefined && parseTimestamp(asOf, "asOf") > parseTimestamp(this.value.dueAt, "dueAt") }
+  getRemainingMilliseconds(asOf: string) { return this.value?.dueAt === undefined ? undefined : parseTimestamp(this.value.dueAt, "dueAt") - parseTimestamp(asOf, "asOf") }
+  toObject() { return this.value === undefined ? undefined : clone(this.value) }
 }
-
-export interface TaskTimingDocument {
-  getStartsAt(): string | undefined;
-  getDueAt(): string | undefined;
-  getTimeZone(): string | undefined;
-  isOverdue(asOf?: string): boolean;
-  toObject(): TaskTiming | undefined;
+class ReminderDocument implements TaskReminderDocument {
+  constructor(private readonly value: TaskReminder) {} get id() { return this.value.id } getId() { return this.value.id } getTrigger() { return clone(this.value.trigger) } getCreatedAt() { return this.value.createdAt }
+  getMetadata() { return clone(this.value.metadata) } toObject() { return clone(this.value) }
+  getScheduledAt(timing: TaskTiming | undefined) { const trigger = this.value.trigger; if (trigger.type === "at") return trigger.at; const anchor = trigger.type === "before_due" ? timing?.dueAt : timing?.startsAt; if (anchor === undefined) return undefined; return new Date(parseTimestamp(anchor, "Reminder anchor") + (trigger.type === "before_due" ? -1 : 1) * parseDuration(trigger.duration)).toISOString() }
 }
-
-export interface TaskRemindersDocument {
-  list(): readonly TaskReminder[];
-  get(id: TaskReminderId): TaskReminder | undefined;
-  has(id: TaskReminderId): boolean;
-  hasReminders(): boolean;
-  getByTriggerType(type: TaskReminderTrigger["type"]): readonly TaskReminder[];
-  count(): number;
+class RemindersDocument implements TaskRemindersDocument {
+  constructor(private readonly values: readonly TaskReminder[]) {} #wrap(value: TaskReminder) { return new ReminderDocument(value) }
+  list() { return this.values.map((value) => this.#wrap(value)) } get(id: TaskReminderId) { const value = this.values.find((item) => item.id === id); return value === undefined ? undefined : this.#wrap(value) }
+  has(id: TaskReminderId) { return this.values.some((item) => item.id === id) } hasReminders() { return this.values.length > 0 }
+  getByTriggerType(type: TaskReminderTrigger["type"]) { return this.values.filter((item) => item.trigger.type === type).map((value) => this.#wrap(value)) } count() { return this.values.length }
 }
-
-export interface TaskScopeDocument {
-  readonly type: TaskScope["type"];
-  getProjectId(): string | undefined;
-  getMilestoneId(): import("../model/domain.js").MilestoneId | undefined;
-  getBreakdownId(): import("../model/domain.js").BreakdownId | undefined;
-  getParentTaskId(): TaskId | undefined;
-  getTaskId(): TaskId | undefined;
+class ScopeDocument implements TaskScopeDocument {
+  constructor(private readonly value: TaskScope) {} get type() { return this.value.type } getProjectId() { return this.value.type === "project" ? this.value.projectId : undefined }
+  getMilestoneId() { return this.value.type === "milestone" ? this.value.milestoneId : undefined } getBreakdownId() { return this.value.type === "breakdown" ? this.value.breakdownId : undefined }
+  getParentTaskId() { return this.value.type === "task" ? this.value.taskId : undefined } getTaskId() { return this.getParentTaskId() } toObject() { return clone(this.value) }
 }
-
-export interface TaskOverviewDocument {
-  getId(): TaskId;
-  getState(): string;
-  getScope(): TaskScope;
-  getTitle(): string;
-  getDescription(): string | undefined;
-  getSequence(): number;
-  getCurrentRevisionId(): string;
-  getCreatedAt(): string;
-  getUpdatedAt(): string;
-  getProgress(): ProgressResult;
-}
-
-export interface TaskAcceptanceStatusDocument {
-  isAccepted(): boolean;
-  getEvaluation(): TaskAcceptanceEvaluation;
-}
-
-export interface TaskCompletionStatusDocument {
-  isCompleted(): boolean;
-  getEvaluation(): TaskCompletionEvaluation;
-}
-
-class TaskProfileDocumentImpl implements TaskProfileDocument {
-  constructor(private readonly profile: TaskProfile) {}
-  getId(): TaskProfileId { return this.profile.ref.id; }
-  getVersion(): number { return this.profile.ref.version; }
-  hasCriteria(): boolean { return this.profile.criteria.enabled; }
-  hasDeliverables(): boolean { return this.profile.deliverables.enabled; }
-  hasDependencies(): boolean { return this.profile.dependencies.enabled; }
-  hasRevisions(): boolean { return this.profile.revisions.enabled; }
-  hasChallenges(): boolean { return this.profile.challenges.enabled; }
-  hasReviews(): boolean { return this.profile.reviews.enabled; }
-  requiresReviews(): boolean { return this.profile.reviews.enabled && this.profile.reviews.required; }
-  hasApprovals(): boolean { return this.profile.approvals.enabled; }
-  requiresApprovals(): boolean { return this.profile.approvals.enabled && this.profile.approvals.required; }
-  hasCompletion(): boolean { return this.profile.completion.enabled; }
-  requiresAcceptance(): boolean { return this.profile.completion.requiresAcceptance; }
-  closeImmediatelyOnAcceptance(): boolean { return this.profile.completion.closeImmediatelyOnAcceptance; }
-}
-
-class TaskTimingDocumentImpl implements TaskTimingDocument {
-  constructor(private readonly timing?: TaskTiming) {}
-  getStartsAt(): string | undefined { return this.timing?.startsAt; }
-  getDueAt(): string | undefined { return this.timing?.dueAt; }
-  getTimeZone(): string | undefined { return this.timing?.timeZone; }
-  isOverdue(asOf?: string): boolean {
-    if (this.timing?.dueAt === undefined) return false;
-    const now = asOf ?? new Date().toISOString();
-    return now > this.timing.dueAt;
-  }
-  toObject(): TaskTiming | undefined {
-    return this.timing === undefined ? undefined : structuredClone(this.timing);
-  }
-}
-
-class TaskRemindersDocumentImpl implements TaskRemindersDocument {
-  constructor(private readonly reminders: readonly TaskReminder[]) {}
-  list(): readonly TaskReminder[] { return structuredClone(this.reminders); }
-  get(id: TaskReminderId): TaskReminder | undefined {
-    const found = this.reminders.find((item) => item.id === id);
-    return found === undefined ? undefined : structuredClone(found);
-  }
-  has(id: TaskReminderId): boolean { return this.reminders.some((item) => item.id === id); }
-  hasReminders(): boolean { return this.reminders.length > 0; }
-  getByTriggerType(type: TaskReminderTrigger["type"]): readonly TaskReminder[] {
-    return structuredClone(this.reminders.filter((item) => item.trigger.type === type));
-  }
-  count(): number { return this.reminders.length; }
-}
-
-class TaskScopeDocumentImpl implements TaskScopeDocument {
-  constructor(private readonly scope: TaskScope) {}
-  get type(): TaskScope["type"] { return this.scope.type; }
-  getProjectId(): string | undefined { return this.scope.type === "project" ? this.scope.projectId : undefined; }
-  getMilestoneId(): import("../model/domain.js").MilestoneId | undefined { return this.scope.type === "milestone" ? this.scope.milestoneId : undefined; }
-  getBreakdownId(): import("../model/domain.js").BreakdownId | undefined { return this.scope.type === "breakdown" ? this.scope.breakdownId : undefined; }
-  getParentTaskId(): TaskId | undefined { return this.scope.type === "task" ? this.scope.taskId : undefined; }
-  getTaskId(): TaskId | undefined { return this.getParentTaskId(); }
+class ProgressDocument implements TaskProgressDocument { constructor(private readonly value: ProgressResult) {} getCompletedWeight() { return this.value.completedWeight } getTotalWeight() { return this.value.totalWeight } getPercentage() { return this.value.percentage } isComplete() { return this.value.percentage >= 100 } toObject() { return clone(this.value) } }
+class DependenciesDocument implements TaskDependenciesDocument {
+  constructor(private readonly task: Task, private readonly graph?: TaskGraphSnapshot) {}
+  #wrap(value: TaskDependency): TaskDependencyDocument { const satisfied = this.graph === undefined ? undefined : evaluateTaskDependency(value, this.graph); return { getId: () => value.id, getTarget: () => clone(value.dependsOn), getGate: () => clone(value.gate), isBlocking: () => value.blocking, isSatisfied: () => satisfied, getFailureReason: () => satisfied === false ? { code: "unsatisfied_dependency", subjectId: value.id, message: `Dependency ${value.id} is not satisfied` } : undefined, toObject: () => clone(value) } }
+  list() { return this.task.dependencies.map((value) => this.#wrap(value)) } get(id: DependencyId) { const value = this.task.dependencies.find((item) => item.id === id); return value === undefined ? undefined : this.#wrap(value) }
+  getBlocking() { return this.list().filter((item) => item.isBlocking()) } getUnsatisfied() { return this.list().filter((item) => item.isSatisfied() === false) } getUnknown() { return this.list().filter((item) => item.isSatisfied() === undefined) } getCount() { return this.task.dependencies.length }
 }
 
 export class TaskDocument {
   readonly #context: TaskDocumentContext;
-  #profile?: TaskProfileDocument;
-  #definition?: MilestoneDefinitionDocument;
-  #timing?: TaskTimingDocument;
-  #reminders?: TaskRemindersDocument;
-  #scope?: TaskScopeDocument;
-  #progress?: MilestoneProgressDocument;
-  #criteria?: CriteriaDocument;
-  #deliverables?: DeliverablesDocument;
-  #sources?: MilestoneSourcesDocument;
-
-  constructor(context: TaskDocumentContext) {
-    this.#context = context;
-  }
-
-  getId(): TaskId { return this.#context.task.id; }
-  getState(): string { return deriveTaskState(this.#context.task as any); }
-  getProfile(): TaskProfileDocument { return (this.#profile ??= new TaskProfileDocumentImpl(this.#context.profile)); }
-  getScope(): TaskScopeDocument { return (this.#scope ??= new TaskScopeDocumentImpl(this.#context.task.scope)); }
-  getTiming(): TaskTimingDocument { return (this.#timing ??= new TaskTimingDocumentImpl(this.#context.task.timing)); }
-  getReminders(): TaskRemindersDocument { return (this.#reminders ??= new TaskRemindersDocumentImpl(this.#context.task.reminders)); }
-  getDefinition(): MilestoneDefinitionDocument {
-    return (this.#definition ??= createDefinitionDocument(this.#context.task.definition));
-  }
-  getDescription(): TextDocument { return this.getDefinition().getDescription(); }
-  getProgress(): MilestoneProgressDocument {
-    return (this.#progress ??= createProgressDocument(calculateTaskProgress(this.#context.task as any)));
-  }
-  getCriteria(): CriteriaDocument {
-    return (this.#criteria ??= createCriteriaDocument({ ...this.#context, milestone: this.#context.task as any } as any));
-  }
-  getDeliverables(): DeliverablesDocument {
-    return (this.#deliverables ??= createDeliverablesDocument({ ...this.#context, milestone: this.#context.task as any } as any));
-  }
-  getSources(): MilestoneSourcesDocument {
-    return (this.#sources ??= createSourcesDocument(this.#context.task.sourceLinks as any ?? [], this.#context.artifacts as any));
-  }
-  getAcceptanceStatus(): TaskAcceptanceStatusDocument {
-    const evalResult = evaluateTaskAcceptance(this.#context.task, this.#context.profile, this.#context.graph, this.#context.artifacts);
-    return {
-      isAccepted: () => this.#context.task.currentAcceptanceId !== undefined,
-      getEvaluation: () => evalResult,
-    };
-  }
-  getCompletionStatus(): TaskCompletionStatusDocument {
-    const evalResult = evaluateTaskCompletion(this.#context.task, this.#context.profile);
-    return {
-      isCompleted: () => this.#context.task.currentCompletionId !== undefined,
-      getEvaluation: () => evalResult,
-    };
-  }
+  constructor(context: TaskDocumentContext) { this.#context = context }
+  getId() { return this.#context.task.id } getState() { return deriveTaskState(this.#context.task) } getProfile() { return new ProfileDocument(this.#context.profile) }
+  getScope() { return new ScopeDocument(this.#context.task.scope) } getDefinition() { return new DefinitionDocument(this.#context.task.definition) } getDescription() { return this.getDefinition().getDescription() }
+  getTiming() { return new TimingDocument(this.#context.task.timing) } getReminders() { return new RemindersDocument(this.#context.task.reminders) } getProgress() { return new ProgressDocument(calculateTaskProgress(this.#context.task)) }
+  getOverview(): TaskOverviewDocument { const task = this.#context.task; const criteria = task.criteria.filter((item) => item.required); const deliverables = task.deliverables.filter((item) => item.required); const challenges = task.challenges.filter((item) => item.taskRevisionId === task.currentRevisionId); const progress = () => calculateTaskProgress(task); const satisfiedCriteria = () => criteria.filter((item) => item.state === "verified" || item.state === "waived").length; const satisfiedDeliverables = () => deliverables.filter((item) => item.state === "satisfied" || item.state === "waived").length; const sourceCounts = () => ({ direct: task.sourceLinks?.length ?? 0, total: sourceLinksForTaskRevision(task, task.currentRevisionId).length }); return { getId: () => task.id, getState: () => deriveTaskState(task), getScope: () => clone(task.scope), getTitle: () => task.definition.title, getDescription: () => task.definition.description, getSequence: () => task.sequence, getCurrentRevisionId: () => task.currentRevisionId, getCreatedAt: () => task.createdAt, getUpdatedAt: () => task.updatedAt, getProgress: progress, getProgressPercentage: () => progress().percentage, isBlocked: () => this.getReadiness().isBlocked(), isAccepted: () => task.currentAcceptanceId !== undefined, isCompleted: () => task.currentCompletionId !== undefined, getOpenChallengeCount: () => challenges.filter(openChallenge).length, getBlockingChallengeCount: () => challenges.filter((item) => item.severity === "blocking" && openChallenge(item)).length, getRequiredCriterionCount: () => criteria.length, getSatisfiedRequiredCriterionCount: satisfiedCriteria, getSatisfiedCriterionCount: satisfiedCriteria, getRequiredDeliverableCount: () => deliverables.length, getSatisfiedRequiredDeliverableCount: satisfiedDeliverables, getSatisfiedDeliverableCount: satisfiedDeliverables, getStartsAt: () => task.timing?.startsAt, getDueAt: () => task.timing?.dueAt, getSourceCounts: sourceCounts, getSourceCount: () => sourceCounts().total } }
+  getCriteria(): TaskCriteriaDocument { const values = this.#context.task.criteria; return { list: () => clone(values), get: (id) => clone(values.find((item) => item.id === id)), getRequired: () => clone(values.filter((item) => item.required)), getUnsatisfied: () => clone(values.filter((item) => item.state !== "verified" && item.state !== "waived")), getCount: () => values.length } }
+  getDeliverables(): TaskDeliverablesDocument { const values = this.#context.task.deliverables; return { list: () => clone(values), get: (id) => clone(values.find((item) => item.id === id)), getRequired: () => clone(values.filter((item) => item.required)), getUnsatisfied: () => clone(values.filter((item) => item.state !== "satisfied" && item.state !== "waived")), getCount: () => values.length } }
+  getDependencies() { return new DependenciesDocument(this.#context.task, this.#context.graph) }
+  getReadiness(): TaskReadinessDocument { const dependencies = this.getDependencies(); const blocking = dependencies.getBlocking(); const challenges = this.getChallenges().getBlocking(); const reasons: EvaluationReason[] = [...blocking.filter((item) => item.isSatisfied() === false).flatMap((item) => item.getFailureReason() ?? []), ...blocking.filter((item) => item.isSatisfied() === undefined).map((item) => ({ code: "unsatisfied_dependency" as const, subjectId: item.getId(), message: `Dependency ${item.getId()} cannot be evaluated without graph context` })), ...challenges.map((item) => ({ code: "blocking_challenge" as const, subjectId: item.id, message: `Blocking challenge ${item.id} is unresolved` }))]; return { canEvaluate: () => this.#context.graph !== undefined || this.#context.task.dependencies.length === 0, isReady: () => reasons.length === 0, isBlocked: () => reasons.length > 0, getBlockingDependencyCount: () => blocking.filter((item) => item.isSatisfied() !== true).length, getBlockingChallengeCount: () => challenges.length, getUnknownDependencyCount: () => dependencies.getUnknown().length, getReasons: () => clone(reasons), getDependencies: () => dependencies } }
+  #sources(values: readonly TaskSourceLink[]): TaskSourcesDocument { return { list: () => clone(values), get: (id) => clone(values.find((item) => item.id === id)), getByRole: (role) => clone(values.filter((item) => item.role === role)), getBySubject: (type, id) => clone(values.filter((item) => item.subject.type === type && item.subject.id === id)), getCount: () => values.length } }
+  getSources() { return this.#sources(this.#context.task.sourceLinks ?? []) } getAllSources() { return this.#sources(sourceLinksForTaskRevision(this.#context.task, this.#context.task.currentRevisionId)) }
+  getChallenges(): TaskChallengesDocument { const task = this.#context.task; const values = task.challenges; return { list: () => clone(values), get: (id) => clone(values.find((item) => item.id === id)), getOpen: () => clone(values.filter(openChallenge)), getBlocking: () => clone(values.filter((item) => item.taskRevisionId === task.currentRevisionId && item.severity === "blocking" && openChallenge(item))), getCurrentRevision: () => clone(values.filter((item) => item.taskRevisionId === task.currentRevisionId)), getCount: () => values.length } }
+  getReviews(): TaskReviewsDocument { const task = this.#context.task; const values = task.reviews; return { list: () => clone(values), get: (id) => clone(values.find((item) => item.id === id)), getCurrentRevision: () => clone(values.filter((item) => item.taskRevisionId === task.currentRevisionId)), getCompleted: () => clone(values.filter((item) => item.state === "completed")), getCount: () => values.length } }
+  getApprovals(): TaskApprovalsDocument { const task = this.#context.task; const stages = task.approvalPolicy?.stages ?? []; const current = task.approvalRecords.filter((item) => item.taskRevisionId === task.currentRevisionId); const evaluation = evaluateTaskAcceptance(task, this.#context.profile, this.#context.graph, this.#context.artifacts); return { getStages: () => clone(stages), getRecords: () => clone(task.approvalRecords), getRecordsForCurrentRevision: () => clone(current), getPendingStages: () => clone(stages.filter((stage) => !evaluation.snapshot.approvals.find((item) => item.stageId === stage.id)?.satisfied)) } }
+  getRevisions(): TaskRevisionsDocument { const task = this.#context.task; return { list: () => clone(task.revisions), get: (id) => clone(task.revisions.find((item) => item.id === id)), getCurrent: () => { const value = task.revisions.find((item) => item.id === task.currentRevisionId); invariant(value !== undefined, "NOT_FOUND", "Current Task revision was not found"); return clone(value) }, getPrevious: () => { const current = task.revisions.find((item) => item.id === task.currentRevisionId); return current?.previousRevisionId === undefined ? undefined : clone(task.revisions.find((item) => item.id === current.previousRevisionId)) }, getCount: () => task.revisions.length } }
+  getAcceptance(): TaskAcceptanceStatusDocument { const task = this.#context.task; const evaluation = evaluateTaskAcceptance(task, this.#context.profile, this.#context.graph, this.#context.artifacts); return { isAccepted: () => task.currentAcceptanceId !== undefined, getCurrent: () => clone(task.acceptanceRecords.find((item) => item.id === task.currentAcceptanceId)), getHistory: () => clone(task.acceptanceRecords), getEvaluation: () => clone(evaluation) } }
+  getCompletion(): TaskCompletionStatusDocument { const task = this.#context.task; const evaluation = evaluateTaskCompletion(task, this.#context.profile, this.#context.graph, this.#context.artifacts); return { isCompleted: () => task.currentCompletionId !== undefined, getCurrent: () => clone(task.completionRecords.find((item) => item.id === task.currentCompletionId)), getHistory: () => clone(task.completionRecords), getEvaluation: () => clone(evaluation) } }
+  getAcceptanceStatus() { return this.getAcceptance() } getCompletionStatus() { return this.getCompletion() }
 }
 
-export function createTaskDocumentContext(input: TaskDocumentBuildInput): TaskDocumentContext {
-  assertValidTaskProfile(input.profile);
-  assertValidTask(input.task, input.profile);
-  return {
-    task: input.task,
-    profile: input.profile,
-    ...(input.graph === undefined ? {} : { graph: input.graph }),
-    ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts }),
-  };
-}
-
-export function createTaskDocument(input: TaskDocumentBuildInput): TaskDocument {
-  return new TaskDocument(createTaskDocumentContext(input));
-}
-
-export class TaskDocumentBuilder {
-  readonly #task: Task;
-  readonly #profile: TaskProfile;
-  #graph?: TaskGraphSnapshot | undefined;
-  #artifacts?: TaskArtifactContext | undefined;
-
-  constructor(task: Task, profile: TaskProfile) {
-    this.#task = task;
-    this.#profile = profile;
-  }
-
-  withGraph(graph: TaskGraphSnapshot | undefined): this {
-    this.#graph = graph;
-    return this;
-  }
-
-  withArtifacts(artifacts: TaskArtifactContext | undefined): this {
-    this.#artifacts = artifacts;
-    return this;
-  }
-
-  build(): TaskDocument {
-    return createTaskDocument({
-      task: this.#task,
-      profile: this.#profile,
-      ...(this.#graph === undefined ? {} : { graph: this.#graph }),
-      ...(this.#artifacts === undefined ? {} : { artifacts: this.#artifacts }),
-    });
-  }
-}
+export function createTaskDocumentContext(input: TaskDocumentBuildInput): TaskDocumentContext { assertValidTaskProfile(input.profile); assertValidTask(input.task, input.profile); return { task: input.task, profile: input.profile, ...(input.graph === undefined ? {} : { graph: input.graph }), ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts }) } }
+export function createTaskDocument(input: TaskDocumentBuildInput): TaskDocument { return new TaskDocument(createTaskDocumentContext(input)) }
+export class TaskDocumentBuilder { readonly #task: Task; readonly #profile: TaskProfile; #graph: TaskGraphSnapshot | undefined; #artifacts: TaskArtifactContext | undefined; constructor(task: Task, profile: TaskProfile) { this.#task = task; this.#profile = profile } withGraph(graph: TaskGraphSnapshot | undefined) { this.#graph = graph; return this } withArtifacts(artifacts: TaskArtifactContext | undefined) { this.#artifacts = artifacts; return this } build() { const graph = this.#graph; const artifacts = this.#artifacts; return createTaskDocument({ task: this.#task, profile: this.#profile, ...(graph === undefined ? {} : { graph }), ...(artifacts === undefined ? {} : { artifacts }) }) } }

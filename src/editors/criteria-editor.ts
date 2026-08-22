@@ -15,7 +15,7 @@ import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/rev
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 interface CriterionEditOptions {
@@ -30,9 +30,7 @@ interface CriterionDefinitionEditOptions extends CriterionEditOptions {
 export class CriteriaEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public add(input: Omit<Criterion | TaskCriterion, "id">, options: CriterionEditOptions = {}): CriterionId {
     ensureOpen(this.session);
@@ -44,19 +42,20 @@ export class CriteriaEditor {
       "Criterion weight must be finite and non-negative",
     );
     const id = this.session.ids.criterion();
-    const criterion = { id, ...clone(input) } as Criterion;
     if (isTaskSession(this.session)) {
+      const criterion = { id, ...clone(input) } as TaskCriterion;
       beginMaterialTaskRevision(this.session, options.reason, options.actor);
-      this.session.draft.criteria.push(criterion as unknown as TaskCriterion);
+      this.session.draft.criteria.push(criterion);
       this.session.changes.push({ type: "criterion_changed", criterionId: criterion.id });
-      emitTask(this.session, "task.criterion_added", { criterion: criterion as unknown as TaskCriterion }, options.actor);
+      emitTask(this.session, "task.criterion_added", { criterion }, options.actor);
     } else {
+      const criterion = { id, ...clone(input) } as Criterion;
       beginMaterialRevision(this.session, options.reason, options.actor);
       this.session.draft.criteria.push(criterion);
       this.session.changes.push({ type: "criterion_changed", criterionId: criterion.id });
       emit(this.session, "criterion.added", { criterion }, options.actor);
     }
-    return criterion.id;
+    return id;
   }
 
   public update(
@@ -92,7 +91,7 @@ export class CriteriaEditor {
         reason: options.reason ?? "Criterion definition changed",
       });
     }
-    this.put(id, { ...updated, state } as any);
+    this.put(id, { ...updated, state } as Criterion | TaskCriterion);
     this.session.changes.push({ type: "criterion_changed", criterionId: id });
     if (isTask) {
       emitTask(this.session as TaskEditorSession, "task.criterion_changed", { criterionId: id, state }, options.actor);
@@ -122,17 +121,20 @@ export class CriteriaEditor {
         options.actor,
       );
     }
-    const criterion = { id: this.session.ids.criterion(), ...clone(replacement) } as Criterion;
-    this.session.draft.criteria[index] = criterion as any;
-    this.session.changes.push({ type: "criterion_changed", criterionId: criterion.id });
+    const replacementId = this.session.ids.criterion();
+    this.session.changes.push({ type: "criterion_changed", criterionId: replacementId });
     if (isTask) {
+      const criterion = { id: replacementId, ...clone(replacement) } as TaskCriterion;
+      (this.session as TaskEditorSession).draft.criteria[index] = criterion;
       emitTask(this.session as TaskEditorSession, "task.criterion_removed", { criterionId: id }, options.actor);
-      emitTask(this.session as TaskEditorSession, "task.criterion_added", { criterion: criterion as any }, options.actor);
+      emitTask(this.session as TaskEditorSession, "task.criterion_added", { criterion }, options.actor);
     } else {
+      const criterion = { id: replacementId, ...clone(replacement) } as Criterion;
+      (this.session as EditorSession).draft.criteria[index] = criterion;
       emit(this.session as EditorSession, "criterion.removed", { criterionId: id }, options.actor);
       emit(this.session as EditorSession, "criterion.added", { criterion }, options.actor);
     }
-    return criterion.id;
+    return replacementId;
   }
 
   public remove(id: CriterionId, options: CriterionEditOptions = {}): void {
@@ -144,7 +146,8 @@ export class CriteriaEditor {
     } else {
       beginMaterialRevision(this.session, options.reason, options.actor);
     }
-    this.session.draft.criteria = (this.session.draft.criteria as any[]).filter((item) => item.id !== id);
+    if (isTaskSession(this.session)) this.session.draft.criteria = this.session.draft.criteria.filter((item) => item.id !== id);
+    else this.session.draft.criteria = this.session.draft.criteria.filter((item) => item.id !== id);
     this.session.changes.push({ type: "criterion_changed", criterionId: id });
     if (isTask) {
       emitTask(this.session as TaskEditorSession, "task.criterion_removed", { criterionId: id }, options.actor);
@@ -193,17 +196,19 @@ export class CriteriaEditor {
   }
 
   private get(id: CriterionId): Criterion | TaskCriterion {
-    const value = (this.session.draft.criteria as any[]).find((item) => item.id === id);
+    const value = this.session.draft.criteria.find((item) => item.id === id);
     invariant(value !== undefined, "NOT_FOUND", `Criterion ${id} was not found`);
     return value;
   }
 
   private put(id: CriterionId, criterion: Criterion | TaskCriterion): void {
-    (this.session.draft.criteria as any[])[this.index(id)] = clone(criterion);
+    const index = this.index(id);
+    if (isTaskSession(this.session)) this.session.draft.criteria[index] = clone(criterion) as TaskCriterion;
+    else this.session.draft.criteria[index] = clone(criterion) as Criterion;
   }
 
   private index(id: CriterionId): number {
-    const index = (this.session.draft.criteria as any[]).findIndex((item) => item.id === id);
+    const index = this.session.draft.criteria.findIndex((item) => item.id === id);
     invariant(index >= 0, "NOT_FOUND", `Criterion ${id} was not found`);
     return index;
   }
@@ -212,5 +217,5 @@ export class CriteriaEditor {
 export type TaskCriteriaEditor = CriteriaEditor;
 
 export function createCriteriaEditor(session: EditorSession | TaskEditorSession): CriteriaEditor {
-  return new CriteriaEditor(session as never);
+  return new CriteriaEditor(session);
 }

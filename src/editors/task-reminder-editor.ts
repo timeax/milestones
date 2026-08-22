@@ -27,11 +27,9 @@ export function createTaskReminderEditor(session: TaskEditorSession): TaskRemind
       invariant(false, "INVALID_ARGUMENT", "Invalid reminder trigger type");
     }
     if (trigger.type === "at") {
-      const atVal = trigger.at ?? trigger.date;
-      invariant(typeof atVal === "string" && atVal.trim().length > 0, "INVALID_ARGUMENT", "Reminder trigger timestamp must be non-empty");
+      invariant(Number.isFinite(Date.parse(trigger.at)), "INVALID_ARGUMENT", "Reminder trigger timestamp must be valid");
     } else {
-      const durVal = trigger.duration ?? (trigger.durationMinutes !== undefined ? String(trigger.durationMinutes) : undefined);
-      invariant(typeof durVal === "string" && durVal.trim().length > 0, "INVALID_ARGUMENT", "Reminder trigger duration must be specified");
+      invariant(/^P(?!$)/u.test(trigger.duration), "INVALID_ARGUMENT", "Reminder trigger duration must be an ISO 8601 duration");
     }
   }
 

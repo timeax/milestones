@@ -16,6 +16,7 @@ export function emit<T extends EventType>(
   actor?: ActorRef,
 ): void {
   session.draft.sequence += 1;
+  // TypeScript cannot correlate a generic discriminant with its extracted payload while constructing the union.
   const event = {
     id: session.ids.event(),
     type,
@@ -42,6 +43,7 @@ export function emitTask<T extends TaskEventType>(
   actor?: ActorRef,
 ): void {
   session.draft.sequence += 1;
+  // TypeScript cannot correlate a generic discriminant with its extracted payload while constructing the union.
   const event = {
     id: session.ids.event(),
     type,
@@ -68,6 +70,7 @@ export function emitBreakdown<T extends BreakdownEventType>(
   actor?: ActorRef,
 ): void {
   session.draft.sequence += 1;
+  // TypeScript cannot correlate a generic discriminant with its extracted payload while constructing the union.
   const event = {
     id: session.ids.event(),
     type,

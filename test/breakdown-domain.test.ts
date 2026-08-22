@@ -6,6 +6,7 @@ import {
   MilestoneEditor,
   SequenceBreakdownIdGenerator,
   SequenceMilestoneIdGenerator,
+  asBreakdownEventId,
   assertValidBreakdownHierarchy,
   detectBreakdownCycles,
   validateBreakdownHierarchy,
@@ -141,7 +142,7 @@ describe("Breakdown Domain & BreakdownEditor", () => {
 
     // Rollback test on fresh editor
     const freshEditor = BreakdownEditor.create(input, harness);
-    expect(freshEditor.isDirty).toBe(false);
+    expect(freshEditor.isDirty).toBe(true);
     freshEditor.definition.setTitle("Will be rolled back");
     expect(freshEditor.isDirty).toBe(true);
     freshEditor.rollback();
@@ -150,6 +151,46 @@ describe("Breakdown Domain & BreakdownEditor", () => {
     // Open existing Breakdown
     const reopened = BreakdownEditor.open(editResult.breakdown, harness);
     expect(reopened.breakdown.id).toBe(editResult.breakdown.id);
+  });
+
+  it("emits Breakdown creation semantics at sequence one", () => {
+    const editor = BreakdownEditor.create(
+      { parentMilestoneId: "parent-created" as any, definition: { title: "Created plan" }, actor: { id: "planner", type: "user" } },
+      { ...createBreakdownTestHarness(), correlationId: "breakdown-create-correlation", causationId: asBreakdownEventId("breakdown-cause") },
+    );
+    const result = editor.commit();
+    expect(result.changes).toEqual([{ type: "created" }]);
+    expect(result.events.map((event) => event.type)).toEqual(["breakdown.created"]);
+    expect(result.events[0]).toMatchObject({
+      actor: { id: "planner", type: "user" },
+      correlationId: "breakdown-create-correlation",
+      causationId: "breakdown-cause",
+      occurredAt: "2026-08-20T12:00:00.000Z",
+    });
+    expect(result.breakdown.sequence).toBe(result.events.at(-1)?.sequence);
+  });
+
+  it("rolls back failed Breakdown transactions and guards commit/concurrency boundaries", () => {
+    const dependencies = createBreakdownTestHarness();
+    const editor = BreakdownEditor.create(
+      { parentMilestoneId: "parent-guards" as any, definition: { title: "Before" } },
+      dependencies,
+    );
+    expect(() => editor.transact("fail", (tx) => {
+      tx.definition.setTitle("During");
+      throw new Error("abort");
+    })).toThrow("abort");
+    expect(editor.breakdown.definition.title).toBe("Before");
+    expect(() => editor.transact("no commit", (tx) => tx.commit())).toThrowError(
+      expect.objectContaining({ code: "INVALID_STATE_TRANSITION" }),
+    );
+    const committed = editor.commit().breakdown;
+    expect(() => editor.definition.setTitle("After close")).toThrowError(
+      expect.objectContaining({ code: "EDITOR_CLOSED" }),
+    );
+    expect(() => BreakdownEditor.open(committed, { ...dependencies, expectedSequence: committed.sequence + 1 })).toThrowError(
+      expect.objectContaining({ code: "CONCURRENCY_CONFLICT" }),
+    );
   });
 
   it("prohibits adding the parent milestone as its own child", () => {

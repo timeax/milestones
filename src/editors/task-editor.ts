@@ -19,6 +19,7 @@ import type {
 import { invariant } from "../model/errors.js";
 import {
   calculateTaskProgress,
+  defaultTaskEvaluationPolicy,
   deriveTaskState,
   evaluateTaskAcceptance,
   evaluateTaskCompletion,
@@ -42,14 +43,14 @@ import { createDeliverableEditor, type DeliverableEditor } from "./deliverable-e
 import { createEvidenceEditor, type EvidenceEditor } from "./evidence-editor.js";
 import { createReviewEditor, type ReviewEditor } from "./review-editor.js";
 import { createRevisionEditor, type RevisionEditor } from "./revision-editor.js";
-import { createSourceEditor, type MilestoneSourceEditor } from "./source-editor.js";
+import { createSourceEditor, type SourceEditor } from "./source-editor.js";
 import { createTaskTimingEditor, type TaskTimingEditor } from "./task-timing-editor.js";
 import { createTaskReminderEditor, type TaskReminderEditor } from "./task-reminder-editor.js";
 import { createTaskDependencyEditor, type TaskDependencyEditor } from "./task-dependency-editor.js";
 import type { DraftTask } from "./internal/draft.js";
 import { emitTask } from "./internal/events.js";
 import { authorizeTask, clone, ensureOpen } from "./internal/helpers.js";
-import { applyTaskReopen } from "./internal/revision.js";
+import { applyTaskReopen, createTaskRevisionSnapshot } from "./internal/revision.js";
 import type { TaskEditorSession } from "./internal/session.js";
 
 export class TaskEditor {
@@ -57,7 +58,7 @@ export class TaskEditor {
   public readonly definition: DefinitionEditor;
   public readonly timing: TaskTimingEditor;
   public readonly reminders: TaskReminderEditor;
-  public readonly sources: MilestoneSourceEditor;
+  public readonly sources: SourceEditor;
   public readonly criteria: CriteriaEditor;
   public readonly deliverables: DeliverableEditor;
   public readonly dependencies: TaskDependencyEditor;
@@ -124,19 +125,7 @@ export class TaskEditor {
       sourceLinks: [],
       snapshot: {
         profile: clone(input.profile.ref),
-        evaluationPolicy: input.evaluationPolicy ?? {
-          requiredCriteriaMustBeVerified: true,
-          requiredDeliverablesMustBeSatisfied: true,
-          waivedCriteriaSatisfyRequired: true,
-          waivedDeliverablesSatisfyRequired: true,
-          blockingChallengesPreventAcceptance: true,
-          requiredReviewResult: "accepted",
-          requireReviewWhenProfileRequires: true,
-          requireApprovalsWhenProfileRequires: true,
-          requiresAcceptance: input.profile.completion.requiresAcceptance,
-          completionRequiresCurrentAcceptance: true,
-          closeImmediatelyOnAcceptance: input.profile.completion.closeImmediatelyOnAcceptance,
-        },
+        evaluationPolicy: input.evaluationPolicy ?? defaultTaskEvaluationPolicy(input.profile),
         definition: clone(input.definition),
         criteria: criteria.map(({ state: _state, ...c }) => c),
         deliverables: deliverables.map(({ state: _state, ...d }) => d),
@@ -171,7 +160,22 @@ export class TaskEditor {
       updatedAt: now,
     };
 
-    return TaskEditor.open(task, input.profile, { ...options, expectedSequence: 1 });
+    const editor = TaskEditor.open(task, input.profile, { ...options, expectedSequence: 1 });
+    editor.session.changes.push({ type: "created" });
+    editor.session.events.push({
+      id: options.ids.event(),
+      type: "task.created",
+      taskId,
+      sequence: 1,
+      revisionId,
+      ...(input.actor === undefined ? {} : { actor: clone(input.actor) }),
+      occurredAt: now,
+      ...(options.correlationId === undefined ? {} : { correlationId: options.correlationId }),
+      ...(options.causationId === undefined ? {} : { causationId: options.causationId }),
+      payload: { profile: clone(input.profile.ref), scope: clone(input.scope) },
+    });
+    initializeHistory(editor.session);
+    return editor;
   }
 
   public static open(task: Task, profile: TaskProfile, options: TaskEditorOptions): TaskEditor {
@@ -199,6 +203,7 @@ export class TaskEditor {
     });
 
     const session: TaskEditorSession = {
+      aggregateType: "task",
       original: clone(task),
       draft,
       profile: clone(profile),
@@ -226,11 +231,11 @@ export class TaskEditor {
   }
 
   public get state(): DerivedTaskState {
-    return deriveTaskState(this.session.draft as any);
+    return deriveTaskState(this.session.draft);
   }
 
   public get progress(): ProgressResult {
-    return calculateTaskProgress(this.session.draft as any);
+    return calculateTaskProgress(this.session.draft);
   }
 
   public get isDirty(): boolean {
@@ -244,7 +249,7 @@ export class TaskEditor {
   public evaluateAcceptance(): TaskAcceptanceEvaluation {
     ensureOpen(this.session);
     return evaluateTaskAcceptance(
-      this.session.draft as any,
+      this.session.draft,
       this.session.profile,
       this.session.graph,
       this.session.artifacts,
@@ -253,67 +258,20 @@ export class TaskEditor {
 
   public evaluateCompletion(): TaskCompletionEvaluation {
     ensureOpen(this.session);
-    return evaluateTaskCompletion(this.session.draft as any, this.session.profile);
+    return evaluateTaskCompletion(
+      this.session.draft,
+      this.session.profile,
+      this.session.graph,
+      this.session.artifacts,
+    );
   }
 
   public accept(actor?: ActorRef): TaskAcceptanceId {
-    return runMutation(this.session, () => {
-      ensureOpen(this.session);
-      authorizeTask(this.session, "task.accept", actor, { type: "task" });
-      const evaluation = this.evaluateAcceptance();
-      invariant(
-        evaluation.accepted,
-        "EVALUATION_FAILED",
-        "Task acceptance preconditions are not met",
-        { reasons: evaluation.reasons },
-      );
-      const id = this.session.ids.acceptance();
-      const acceptance: TaskAcceptance = {
-        id,
-        taskId: this.session.draft.id,
-        taskRevisionId: this.session.draft.currentRevisionId,
-        ...(actor === undefined ? {} : { actor }),
-        acceptedAt: this.session.clock.now(),
-        snapshot: evaluation.snapshot,
-      };
-      this.session.draft.acceptanceRecords.push(acceptance);
-      this.session.draft.currentAcceptanceId = id;
-      this.session.changes.push({ type: "accepted", acceptanceId: id });
-      emitTask(this.session, "task.accepted", { acceptance: clone(acceptance) }, actor);
-
-      if (this.session.profile.completion.closeImmediatelyOnAcceptance && this.session.profile.completion.enabled) {
-        this.complete(actor);
-      }
-      return id;
-    });
+    return runMutation(this.session, () => this.acceptInternal(actor));
   }
 
-  public complete(actor?: ActorRef): TaskCompletionId {
-    return runMutation(this.session, () => {
-      ensureOpen(this.session);
-      authorizeTask(this.session, "task.complete", actor, { type: "task" });
-      const evaluation = this.evaluateCompletion();
-      invariant(
-        evaluation.completable,
-        "EVALUATION_FAILED",
-        "Task completion preconditions are not met",
-        { reasons: evaluation.reasons },
-      );
-      const id = this.session.ids.completion();
-      const completion: TaskCompletion = {
-        id,
-        taskId: this.session.draft.id,
-        taskRevisionId: this.session.draft.currentRevisionId,
-        ...(this.session.draft.currentAcceptanceId === undefined ? {} : { acceptanceId: this.session.draft.currentAcceptanceId }),
-        ...(actor === undefined ? {} : { actor }),
-        completedAt: this.session.clock.now(),
-      };
-      this.session.draft.completionRecords.push(completion);
-      this.session.draft.currentCompletionId = id;
-      this.session.changes.push({ type: "completed", completionId: id });
-      emitTask(this.session, "task.completed", { completion: clone(completion) }, actor);
-      return id;
-    });
+  public complete(actor?: ActorRef, reason?: string): TaskCompletionId {
+    return runMutation(this.session, () => this.completeInternal(actor, reason));
   }
 
   public reopen(request: TaskReopenRequest): void {
@@ -329,7 +287,26 @@ export class TaskEditor {
 
   public commit(): TaskEditResult {
     ensureOpen(this.session);
-    assertValidTask(this.session.draft as any, this.session.profile);
+    invariant(
+      this.session.historyState.transactionDepth === 0,
+      "INVALID_STATE_TRANSITION",
+      "Cannot commit inside an active editor transaction",
+    );
+    invariant(
+      this.session.original.sequence === this.session.expectedSequence,
+      "CONCURRENCY_CONFLICT",
+      "Original task sequence changed during edit",
+    );
+    if (this.session.revision !== undefined) {
+      const finalRevision: TaskRevision = {
+        ...this.session.revision,
+        snapshot: createTaskRevisionSnapshot(this.session),
+      };
+      const index = this.session.draft.revisions.findIndex((item) => item.id === finalRevision.id);
+      this.session.draft.revisions[index] = finalRevision;
+      this.session.revision = finalRevision;
+    }
+    assertValidTask(this.session.draft, this.session.profile);
     this.session.closed = true;
     return {
       task: clone(this.session.draft) as Task,
@@ -342,6 +319,87 @@ export class TaskEditor {
 
   public rollback(): void {
     ensureOpen(this.session);
+    invariant(
+      this.session.historyState.transactionDepth === 0,
+      "INVALID_STATE_TRANSITION",
+      "Cannot roll back the editor inside an active transaction",
+    );
     this.session.closed = true;
+  }
+
+  private acceptInternal(actor?: ActorRef): TaskAcceptanceId {
+    ensureOpen(this.session);
+    invariant(
+      this.session.draft.currentAcceptanceId === undefined,
+      "LIFECYCLE_CONFLICT",
+      "Task already has a current acceptance",
+    );
+    authorizeTask(this.session, "task.accept", actor, { type: "task" });
+    const evaluation = this.evaluateAcceptance();
+    invariant(
+      evaluation.accepted,
+      "EVALUATION_FAILED",
+      "Task acceptance preconditions are not met",
+      { reasons: evaluation.reasons },
+    );
+    const id = this.session.ids.acceptance();
+    const acceptance: TaskAcceptance = {
+      id,
+      taskId: this.session.draft.id,
+      taskRevisionId: this.session.draft.currentRevisionId,
+      ...(actor === undefined ? {} : { actor }),
+      acceptedAt: this.session.clock.now(),
+      snapshot: evaluation.snapshot,
+    };
+    this.session.draft.acceptanceRecords.push(acceptance);
+    this.session.draft.currentAcceptanceId = id;
+    this.session.changes.push({ type: "accepted", acceptanceId: id });
+    emitTask(this.session, "task.accepted", { acceptance: clone(acceptance) }, actor);
+
+    const policy = this.currentRevision().snapshot.evaluationPolicy;
+    if (this.session.profile.completion.enabled && policy.closeImmediatelyOnAcceptance) {
+      this.completeInternal(actor, "Profile closes immediately on acceptance");
+    }
+    return id;
+  }
+
+  private completeInternal(actor?: ActorRef, reason?: string): TaskCompletionId {
+    ensureOpen(this.session);
+    invariant(
+      this.session.draft.currentCompletionId === undefined,
+      "LIFECYCLE_CONFLICT",
+      "Task already has a current completion",
+    );
+    authorizeTask(this.session, "task.complete", actor, { type: "task" });
+    const evaluation = this.evaluateCompletion();
+    invariant(
+      evaluation.completable,
+      "EVALUATION_FAILED",
+      "Task completion preconditions are not met",
+      { reasons: evaluation.reasons },
+    );
+    const id = this.session.ids.completion();
+    const completion: TaskCompletion = {
+      id,
+      taskId: this.session.draft.id,
+      taskRevisionId: this.session.draft.currentRevisionId,
+      ...(this.session.draft.currentAcceptanceId === undefined ? {} : { acceptanceId: this.session.draft.currentAcceptanceId }),
+      ...(actor === undefined ? {} : { actor }),
+      ...(reason === undefined ? {} : { reason }),
+      completedAt: this.session.clock.now(),
+    };
+    this.session.draft.completionRecords.push(completion);
+    this.session.draft.currentCompletionId = id;
+    this.session.changes.push({ type: "completed", completionId: id });
+    emitTask(this.session, "task.completed", { completion: clone(completion) }, actor);
+    return id;
+  }
+
+  private currentRevision(): TaskRevision {
+    const revision = this.session.draft.revisions.find(
+      (item) => item.id === this.session.draft.currentRevisionId,
+    );
+    invariant(revision !== undefined, "NOT_FOUND", "Current Task revision was not found");
+    return revision;
   }
 }

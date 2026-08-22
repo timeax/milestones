@@ -5,15 +5,13 @@ import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/rev
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 export class DefinitionEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public update(
     definition: MilestoneDefinition | TaskDefinition,
@@ -39,5 +37,5 @@ export class DefinitionEditor {
 export type TaskDefinitionEditor = DefinitionEditor;
 
 export function createDefinitionEditor(session: EditorSession | TaskEditorSession): DefinitionEditor {
-  return new DefinitionEditor(session as never);
+  return new DefinitionEditor(session);
 }

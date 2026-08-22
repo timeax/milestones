@@ -39,10 +39,7 @@ export interface ExecutionProfileFeatures {
 
 export type ExecutionSourceRole =
   | "specification"
-  | "verification"
-  | "provenance"
   | "reference"
-  | "audit"
   | "context"
   | "decision";
 

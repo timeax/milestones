@@ -156,6 +156,7 @@ export function deserializeMilestone(value: unknown): Milestone {
     "SERIALIZATION_INVALID",
     "Malformed milestone wire record",
   );
+  // The wire boundary is narrowed structurally above, then fully checked by the domain validator.
   assertValidMilestone(milestone as unknown as Milestone);
   return structuredClone(milestone) as unknown as Milestone;
 }
@@ -359,6 +360,7 @@ export function deserializeTask(value: unknown): Task {
     "SERIALIZATION_INVALID",
     "Malformed task wire record",
   );
+  // The wire boundary is narrowed structurally above, then fully checked by the domain validator.
   assertValidTask(task as unknown as Task);
   return structuredClone(task) as unknown as Task;
 }
@@ -520,6 +522,7 @@ export function deserializeBreakdown(value: unknown): Breakdown {
     "Malformed breakdown wire record",
   );
   const milestones = (breakdown["milestones"] as unknown[]).map((m) => deserializeMilestone(m));
+  // Child records are hydrated canonically before the validated wire object becomes a Breakdown.
   const result = {
     ...breakdown,
     milestones,

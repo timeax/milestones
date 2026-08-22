@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "id": "task_task_1",
+  "profile": { "id": "task-profile-golden", "version": 1 },
+  "scope": { "type": "project", "projectId": "project-golden" },
+  "definition": { "title": "Golden Task" },
+  "sequence": 1,
+  "currentRevisionId": "task_revision_2",
+  "revisions": [{
+    "id": "task_revision_2", "taskId": "task_task_1", "number": 1,
+    "reason": "Initial task revision", "createdAt": "2026-08-20T00:00:00.000Z",
+    "sourceLinks": [],
+    "snapshot": {
+      "profile": { "id": "task-profile-golden", "version": 1 },
+      "evaluationPolicy": {
+        "requiredCriteriaMustBeVerified": true,
+        "requiredDeliverablesMustBeSatisfied": true,
+        "waivedCriteriaSatisfyRequired": true,
+        "waivedDeliverablesSatisfyRequired": true,
+        "blockingChallengesPreventAcceptance": true,
+        "requiredReviewResult": "accepted",
+        "requireReviewWhenProfileRequires": false,
+        "requireApprovalsWhenProfileRequires": false,
+        "requiresAcceptance": false,
+        "completionRequiresCurrentAcceptance": false,
+        "closeImmediatelyOnAcceptance": false
+      },
+      "definition": { "title": "Golden Task" },
+      "criteria": [], "deliverables": [], "dependencies": [], "sources": [],
+      "timing": { "startsAt": "2026-08-20T09:00:00.000Z", "dueAt": "2026-08-21T09:00:00.000Z", "timeZone": "UTC" }
+    }
+  }],
+  "criteria": [], "deliverables": [], "dependencies": [], "challenges": [],
+  "reviews": [], "approvalRecords": [], "acceptanceRecords": [], "completionRecords": [],
+  "timing": { "startsAt": "2026-08-20T09:00:00.000Z", "dueAt": "2026-08-21T09:00:00.000Z", "timeZone": "UTC" },
+  "reminders": [{ "trigger": { "type": "before_due", "duration": "PT1H" }, "id": "task_reminder_3", "createdAt": "2026-08-20T00:00:00.000Z" }],
+  "sourceLinks": [],
+  "createdAt": "2026-08-20T00:00:00.000Z",
+  "updatedAt": "2026-08-20T00:00:00.000Z"
+}

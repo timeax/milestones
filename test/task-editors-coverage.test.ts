@@ -140,13 +140,13 @@ describe("Task Sub-Editors Coverage", () => {
       harness,
     );
 
-    const r1 = editor.reminders.add({ trigger: { type: "at", date: "2026-08-22T09:00:00.000Z" } }, actor);
-    const r2 = editor.reminders.add({ trigger: { type: "before_due", durationMinutes: 120 } }, actor);
+    const r1 = editor.reminders.add({ trigger: { type: "at", at: "2026-08-22T09:00:00.000Z" } }, actor);
+    const r2 = editor.reminders.add({ trigger: { type: "before_due", duration: "PT2H" } }, actor);
     expect(editor.reminders.list().length).toBe(2);
     expect(editor.reminders.has(r1)).toBe(true);
     expect(editor.reminders.has(r2)).toBe(true);
 
-    editor.reminders.update(r1, { trigger: { type: "at", date: "2026-08-23T09:00:00.000Z" } }, actor);
+    editor.reminders.update(r1, { trigger: { type: "at", at: "2026-08-23T09:00:00.000Z" } }, actor);
     expect(editor.reminders.get(r1)?.trigger.type).toBe("at");
 
     editor.reminders.clear(actor);
@@ -205,6 +205,9 @@ describe("Task Sub-Editors Coverage", () => {
     // Withdraw successor evidence
     editor.evidence.withdraw(successorId, "Outdated logs", actor);
     expect(editor.task.challenges[0]!.evidence.find((e) => e.id === successorId)?.state).toBe("withdrawn");
+    const evidenceSnapshot = editor.evaluateAcceptance().snapshot.challenges[0]!.evidence;
+    expect(evidenceSnapshot.map((item) => item.id)).toEqual([evidenceId, successorId]);
+    expect(evidenceSnapshot.every((item) => item.sourceStatus === "pending")).toBe(true);
 
     // Resolve challenge
     editor.challenges.resolve(
@@ -256,7 +259,7 @@ describe("Task Sub-Editors Coverage", () => {
       harness,
     );
 
-    const r1 = editor.reminders.add({ trigger: { type: "before_due", durationMinutes: 30 } }, actor);
+    const r1 = editor.reminders.add({ trigger: { type: "before_due", duration: "PT30M" } }, actor);
     expect(editor.reminders.has(r1)).toBe(true);
 
     editor.reminders.remove(r1, actor);

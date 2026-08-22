@@ -82,6 +82,7 @@ export class MilestoneEditor {
       "Editor profile does not match the milestone current profile",
     );
     this.session = {
+      aggregateType: "milestone",
       original: milestone,
       draft: clone(milestone) as DraftMilestone,
       profile: clone(profile),

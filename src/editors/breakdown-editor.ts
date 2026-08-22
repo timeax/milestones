@@ -53,7 +53,24 @@ export class BreakdownEditor {
       createdAt: now,
       updatedAt: now,
     };
-    return BreakdownEditor.open(breakdown, { ...options, expectedSequence: 1 });
+    const editor = BreakdownEditor.open(breakdown, { ...options, expectedSequence: 1 });
+    editor.session.changes.push({ type: "created" });
+    editor.session.events.push({
+      id: options.ids.event(),
+      type: "breakdown.created",
+      breakdownId: id,
+      sequence: 1,
+      ...(input.actor === undefined ? {} : { actor: clone(input.actor) }),
+      occurredAt: now,
+      ...(options.correlationId === undefined ? {} : { correlationId: options.correlationId }),
+      ...(options.causationId === undefined ? {} : { causationId: options.causationId }),
+      payload: {
+        parentMilestoneId: input.parentMilestoneId,
+        ...(input.owner === undefined ? {} : { owner: clone(input.owner) }),
+      },
+    });
+    initializeHistory(editor.session);
+    return editor;
   }
 
   public static open(breakdown: Breakdown, options: BreakdownEditorOptions): BreakdownEditor {
@@ -71,6 +88,7 @@ export class BreakdownEditor {
     });
 
     const session: BreakdownEditorSession = {
+      aggregateType: "breakdown",
       original: clone(breakdown),
       draft,
       clock: options.clock,
@@ -107,7 +125,17 @@ export class BreakdownEditor {
 
   public commit(): BreakdownEditResult {
     ensureOpen(this.session);
-    assertValidBreakdown(this.session.draft as any);
+    invariant(
+      this.session.historyState.transactionDepth === 0,
+      "INVALID_STATE_TRANSITION",
+      "Cannot commit inside an active editor transaction",
+    );
+    invariant(
+      this.session.original.sequence === this.session.expectedSequence,
+      "CONCURRENCY_CONFLICT",
+      "Original Breakdown sequence changed during edit",
+    );
+    assertValidBreakdown(this.session.draft);
     this.session.closed = true;
     return {
       breakdown: clone(this.session.draft) as Breakdown,
@@ -118,6 +146,11 @@ export class BreakdownEditor {
 
   public rollback(): void {
     ensureOpen(this.session);
+    invariant(
+      this.session.historyState.transactionDepth === 0,
+      "INVALID_STATE_TRANSITION",
+      "Cannot roll back the editor inside an active transaction",
+    );
     this.session.closed = true;
   }
 }

@@ -26,6 +26,12 @@ export interface MilestoneEditorHistory {
 export type TaskEditorHistory = MilestoneEditorHistory;
 export type BreakdownEditorHistory = MilestoneEditorHistory;
 
+type AnyEditorSession = EditorSession | TaskEditorSession | BreakdownEditorSession;
+type AnyHistorySnapshot =
+  | EditorHistorySnapshot
+  | TaskEditorHistorySnapshot
+  | BreakdownEditorHistorySnapshot;
+
 export function createHistoryState<T>(limit = DEFAULT_EDITOR_HISTORY_LIMIT): EditorHistoryState<T> {
   invariant(
     Number.isSafeInteger(limit) && limit >= 0 && limit <= MAX_EDITOR_HISTORY_LIMIT,
@@ -42,13 +48,19 @@ export function createHistoryState<T>(limit = DEFAULT_EDITOR_HISTORY_LIMIT): Edi
   };
 }
 
-export function initializeHistory(session: EditorSession | TaskEditorSession | BreakdownEditorSession): void {
-  session.historyState.snapshots = [captureHistorySnapshot(session) as any];
+export function initializeHistory(session: AnyEditorSession): void {
+  if (isTaskSession(session)) {
+    session.historyState.snapshots = [captureHistorySnapshot(session)];
+  } else if (isBreakdownSession(session)) {
+    session.historyState.snapshots = [captureHistorySnapshot(session)];
+  } else {
+    session.historyState.snapshots = [captureHistorySnapshot(session)];
+  }
   session.historyState.index = 0;
 }
 
 export class MilestoneEditorHistoryController implements MilestoneEditorHistory {
-  public constructor(private readonly session: EditorSession | TaskEditorSession | BreakdownEditorSession) {}
+  public constructor(private readonly session: AnyEditorSession) {}
 
   public get canUndo(): boolean {
     return !this.session.closed && this.session.historyState.index > 0;
@@ -96,8 +108,7 @@ export class MilestoneEditorHistoryController implements MilestoneEditorHistory 
   public clear(): void {
     ensureOpen(this.session);
     assertOutsideTransaction(this.session);
-    this.session.historyState.snapshots = [captureHistorySnapshot(this.session) as any];
-    this.session.historyState.index = 0;
+    initializeHistory(this.session);
   }
 }
 
@@ -109,7 +120,7 @@ export class BreakdownEditorHistoryController extends MilestoneEditorHistoryCont
  * belong on a direct reader/facade and must not be added to this command proxy.
  */
 export function historyAwareCommands<T extends object>(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
+  session: AnyEditorSession,
   editor: T,
 ): T {
   return new Proxy(editor, {
@@ -117,16 +128,13 @@ export function historyAwareCommands<T extends object>(
       const value = Reflect.get(target, property, receiver) as unknown;
       if (typeof value !== "function") return value;
       return (...args: unknown[]) =>
-        runMutation(
-          session as any,
-          () => Reflect.apply(value, target, args) as unknown,
-        );
+        runMutation(session, () => Reflect.apply(value, target, args) as unknown);
     },
   });
 }
 
 export function runMutation<T>(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
+  session: AnyEditorSession,
   operation: () => T,
 ): T {
   ensureOpen(session);
@@ -138,7 +146,7 @@ export function runMutation<T>(
       if (session.historyState.transactionDepth > 0) {
         session.historyState.transactionMutationCount += 1;
       } else {
-        appendHistorySnapshot(session, after as any);
+        appendHistorySnapshot(session, after);
       }
     }
     return result;
@@ -149,7 +157,7 @@ export function runMutation<T>(
 }
 
 export function runTransaction<T>(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
+  session: AnyEditorSession,
   label: string,
   operation: () => T,
 ): T {
@@ -165,7 +173,7 @@ export function runTransaction<T>(
     if (isOutermost) {
       const mutated = session.historyState.transactionMutationCount > mutationCountBefore;
       session.historyState.transactionMutationCount = mutationCountBefore;
-      if (mutated) appendHistorySnapshot(session, captureHistorySnapshot(session) as any);
+      if (mutated) appendHistorySnapshot(session, captureHistorySnapshot(session));
     }
     return result;
   } catch (error) {
@@ -177,10 +185,26 @@ export function runTransaction<T>(
 }
 
 function appendHistorySnapshot(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
-  snapshot: EditorHistorySnapshot | TaskEditorHistorySnapshot | BreakdownEditorHistorySnapshot,
+  session: AnyEditorSession,
+  snapshot: AnyHistorySnapshot,
 ): void {
-  const state = session.historyState as EditorHistoryState<any>;
+  if (isTaskSession(session)) {
+    invariant(isTaskSnapshot(snapshot), "INVALID_ARGUMENT", "Task history snapshot does not match its editor");
+    appendSnapshot(session.historyState, snapshot);
+  } else if (isBreakdownSession(session)) {
+    invariant(
+      isBreakdownSnapshot(snapshot),
+      "INVALID_ARGUMENT",
+      "Breakdown history snapshot does not match its editor",
+    );
+    appendSnapshot(session.historyState, snapshot);
+  } else {
+    invariant(isMilestoneSnapshot(snapshot), "INVALID_ARGUMENT", "Milestone history snapshot does not match its editor");
+    appendSnapshot(session.historyState, snapshot);
+  }
+}
+
+function appendSnapshot<TSnapshot>(state: EditorHistoryState<TSnapshot>, snapshot: TSnapshot): void {
   state.snapshots = state.snapshots.slice(0, state.index + 1);
   state.snapshots.push(clone(snapshot));
   const maximumPoints = state.limit + 1;
@@ -190,41 +214,102 @@ function appendHistorySnapshot(
   state.index = state.snapshots.length - 1;
 }
 
-function captureHistorySnapshot(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
-): EditorHistorySnapshot | TaskEditorHistorySnapshot | BreakdownEditorHistorySnapshot {
-  if ("profile" in session) {
+function captureHistorySnapshot(session: EditorSession): EditorHistorySnapshot;
+function captureHistorySnapshot(session: TaskEditorSession): TaskEditorHistorySnapshot;
+function captureHistorySnapshot(session: BreakdownEditorSession): BreakdownEditorHistorySnapshot;
+function captureHistorySnapshot(session: AnyEditorSession): AnyHistorySnapshot;
+function captureHistorySnapshot(session: AnyEditorSession): AnyHistorySnapshot {
+  if (isTaskSession(session)) {
     return clone({
+      aggregateType: "task",
       draft: session.draft,
       profile: session.profile,
       changes: session.changes,
       events: session.events,
       invalidations: session.invalidations,
       ...(session.revision === undefined ? {} : { revision: session.revision }),
-    } as any);
-  } else {
+    });
+  }
+  if (isBreakdownSession(session)) {
     return clone({
+      aggregateType: "breakdown",
       draft: session.draft,
       changes: session.changes,
       events: session.events,
     });
   }
+  return clone({
+    aggregateType: "milestone",
+    draft: session.draft,
+    profile: session.profile,
+    changes: session.changes,
+    events: session.events,
+    invalidations: session.invalidations,
+    ...(session.revision === undefined ? {} : { revision: session.revision }),
+  });
 }
 
 function restoreHistorySnapshot(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
-  snapshot: EditorHistorySnapshot | TaskEditorHistorySnapshot | BreakdownEditorHistorySnapshot,
+  session: AnyEditorSession,
+  snapshot: AnyHistorySnapshot,
 ): void {
-  const restored = clone(snapshot) as any;
-  session.draft = restored.draft;
-  if ("profile" in session) {
-    (session as any).profile = restored.profile;
-    (session as any).invalidations = [...restored.invalidations];
-    if (restored.revision === undefined) delete (session as any).revision;
-    else (session as any).revision = restored.revision;
+  if (isTaskSession(session)) {
+    invariant(isTaskSnapshot(snapshot), "INVALID_ARGUMENT", "Task history snapshot does not match its editor");
+    restoreTaskSnapshot(session, clone(snapshot));
+  } else if (isBreakdownSession(session)) {
+    invariant(
+      isBreakdownSnapshot(snapshot),
+      "INVALID_ARGUMENT",
+      "Breakdown history snapshot does not match its editor",
+    );
+    const restored = clone(snapshot);
+    session.draft = restored.draft;
+    session.changes = [...restored.changes];
+    session.events = [...restored.events];
+  } else {
+    invariant(isMilestoneSnapshot(snapshot), "INVALID_ARGUMENT", "Milestone history snapshot does not match its editor");
+    restoreMilestoneSnapshot(session, clone(snapshot));
   }
+}
+
+function restoreTaskSnapshot(session: TaskEditorSession, restored: TaskEditorHistorySnapshot): void {
+  session.draft = restored.draft;
+  session.profile = restored.profile;
+  session.invalidations = [...restored.invalidations];
+  if (restored.revision === undefined) delete session.revision;
+  else session.revision = restored.revision;
   session.changes = [...restored.changes];
   session.events = [...restored.events];
+}
+
+function restoreMilestoneSnapshot(session: EditorSession, restored: EditorHistorySnapshot): void {
+  session.draft = restored.draft;
+  session.profile = restored.profile;
+  session.invalidations = [...restored.invalidations];
+  if (restored.revision === undefined) delete session.revision;
+  else session.revision = restored.revision;
+  session.changes = [...restored.changes];
+  session.events = [...restored.events];
+}
+
+function isTaskSession(session: AnyEditorSession): session is TaskEditorSession {
+  return session.aggregateType === "task";
+}
+
+function isBreakdownSession(session: AnyEditorSession): session is BreakdownEditorSession {
+  return session.aggregateType === "breakdown";
+}
+
+function isTaskSnapshot(snapshot: AnyHistorySnapshot): snapshot is TaskEditorHistorySnapshot {
+  return snapshot.aggregateType === "task";
+}
+
+function isBreakdownSnapshot(snapshot: AnyHistorySnapshot): snapshot is BreakdownEditorHistorySnapshot {
+  return snapshot.aggregateType === "breakdown";
+}
+
+function isMilestoneSnapshot(snapshot: AnyHistorySnapshot): snapshot is EditorHistorySnapshot {
+  return !isTaskSnapshot(snapshot) && !isBreakdownSnapshot(snapshot);
 }
 
 function sameSnapshot(left: unknown, right: unknown): boolean {
@@ -232,7 +317,7 @@ function sameSnapshot(left: unknown, right: unknown): boolean {
 }
 
 function assertOutsideTransaction(
-  session: EditorSession | TaskEditorSession | BreakdownEditorSession,
+  session: AnyEditorSession,
 ): void {
   invariant(
     session.historyState.transactionDepth === 0,

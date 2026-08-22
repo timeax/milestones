@@ -4,7 +4,8 @@ import type {
   ChallengeResolutionOutcome,
   ChallengeState,
   ChallengeTarget,
-  Milestone,
+  MilestoneChallenge,
+  TaskChallenge,
   TaskChallengeTarget,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
@@ -20,19 +21,17 @@ import {
 } from "./internal/helpers.js";
 import type { Mutable } from "./internal/draft.js";
 import { applyReopen, applyTaskReopen } from "./internal/revision.js";
-import { resolveSources } from "../services/sources.js";
+import { resolveSources, resolveTaskSources } from "../services/sources.js";
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 export class ChallengeEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public raise(
     target: ChallengeTarget | TaskChallengeTarget,
@@ -60,8 +59,8 @@ export class ChallengeEditor {
     if (isTask) {
       const challenge = {
         id,
-        taskId: this.session.draft.id as any,
-        taskRevisionId: this.session.draft.currentRevisionId as any,
+        taskId: this.session.draft.id,
+        taskRevisionId: this.session.draft.currentRevisionId,
         target: clone(target) as TaskChallengeTarget,
         reason,
         severity,
@@ -71,9 +70,9 @@ export class ChallengeEditor {
         ...(raisedBy === undefined ? {} : { raisedBy }),
         createdAt: this.session.clock.now(),
       };
-      (this.session.draft.challenges as any[]).push(challenge);
+      this.session.draft.challenges.push(challenge);
       this.session.changes.push({ type: "challenge_changed", challengeId: id });
-      emitTask(this.session as TaskEditorSession, "task.challenge_raised", { challenge: clone(challenge) as any }, raisedBy);
+      emitTask(this.session, "task.challenge_raised", { challenge: clone(challenge) }, raisedBy);
     } else {
       const challenge = {
         id,
@@ -106,25 +105,20 @@ export class ChallengeEditor {
     options: { readonly summary?: string; readonly actor?: ActorRef } = {},
   ): void {
     ensureOpen(this.session);
-    const challenge = this.get(id);
-    assertChallengeTransition(challenge.state, "resolved");
     const isTask = isTaskSession(this.session);
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "challenge.resolve", options.actor, { type: "challenge", challengeId: id });
     } else {
       authorize(this.session as EditorSession, "challenge.resolve", options.actor, { type: "challenge", challengeId: id });
     }
-    const resolution = {
-      outcome,
-      ...(options.summary === undefined ? {} : { summary: options.summary }),
-      ...(options.actor === undefined ? {} : { resolvedBy: options.actor }),
-      resolvedAt: this.session.clock.now(),
-      sourceSnapshot: resolveSources(challenge.sourceLinks ?? [], this.session.artifacts as any) as any,
-    };
-    challenge.state = "resolved";
-    challenge.resolution = resolution;
     this.session.changes.push({ type: "challenge_changed", challengeId: id });
     if (isTask) {
+      const taskSession = this.session as TaskEditorSession;
+      const challenge = this.getTask(id, taskSession);
+      assertChallengeTransition(challenge.state, "resolved");
+      const resolution = { outcome, ...(options.summary === undefined ? {} : { summary: options.summary }), ...(options.actor === undefined ? {} : { resolvedBy: options.actor }), resolvedAt: taskSession.clock.now(), sourceSnapshot: resolveTaskSources(challenge.sourceLinks ?? [], taskSession.artifacts) };
+      challenge.state = "resolved";
+      challenge.resolution = resolution;
       emitTask(this.session as TaskEditorSession, "task.challenge_resolved", { challengeId: id, resolution }, options.actor);
       if (outcome !== "no_effect" && this.session.draft.currentAcceptanceId !== undefined) {
         applyTaskReopen(this.session as TaskEditorSession, {
@@ -135,6 +129,12 @@ export class ChallengeEditor {
         });
       }
     } else {
+      const milestoneSession = this.session as EditorSession;
+      const challenge = this.getMilestone(id, milestoneSession);
+      assertChallengeTransition(challenge.state, "resolved");
+      const resolution = { outcome, ...(options.summary === undefined ? {} : { summary: options.summary }), ...(options.actor === undefined ? {} : { resolvedBy: options.actor }), resolvedAt: milestoneSession.clock.now(), sourceSnapshot: resolveSources(challenge.sourceLinks ?? [], milestoneSession.artifacts) };
+      challenge.state = "resolved";
+      challenge.resolution = resolution;
       emit(this.session as EditorSession, "challenge.resolved", { challengeId: id, resolution }, options.actor);
       if (outcome !== "no_effect" && this.session.draft.currentAcceptanceId !== undefined) {
         applyReopen(this.session as EditorSession, {
@@ -149,20 +149,24 @@ export class ChallengeEditor {
 
   private transition(id: ChallengeId, state: ChallengeState, actor?: ActorRef): void {
     ensureOpen(this.session);
-    const challenge = this.get(id);
-    assertChallengeTransition(challenge.state, state);
-    challenge.state = state;
-    if (state !== "resolved") delete challenge.resolution;
     this.session.changes.push({ type: "challenge_changed", challengeId: id });
     if (isTaskSession(this.session)) {
-      emitTask(this.session as TaskEditorSession, "task.challenge_changed", { challengeId: id, state }, actor);
+      const challenge = this.getTask(id, this.session);
+      assertChallengeTransition(challenge.state, state); challenge.state = state; if (state !== "resolved") delete challenge.resolution;
+      emitTask(this.session, "task.challenge_changed", { challengeId: id, state }, actor);
     } else {
-      emit(this.session as EditorSession, "challenge.changed", { challengeId: id, state }, actor);
+      const challenge = this.getMilestone(id, this.session);
+      assertChallengeTransition(challenge.state, state); challenge.state = state; if (state !== "resolved") delete challenge.resolution;
+      emit(this.session, "challenge.changed", { challengeId: id, state }, actor);
     }
   }
 
-  private get(id: ChallengeId): Mutable<Milestone["challenges"][number]> {
-    const value = (this.session.draft.challenges as any[]).find((item) => item.id === id);
+  private getTask(id: ChallengeId, session: TaskEditorSession): Mutable<TaskChallenge> {
+    const value = session.draft.challenges.find((item) => item.id === id);
+    invariant(value !== undefined, "NOT_FOUND", `Challenge ${id} was not found`); return value;
+  }
+  private getMilestone(id: ChallengeId, session: EditorSession): Mutable<MilestoneChallenge> {
+    const value = session.draft.challenges.find((item) => item.id === id);
     invariant(value !== undefined, "NOT_FOUND", `Challenge ${id} was not found`);
     return value;
   }
@@ -170,13 +174,13 @@ export class ChallengeEditor {
   private assertTarget(target: ChallengeTarget | TaskChallengeTarget): void {
     if (target.type === "criterion") {
       invariant(
-        (this.session.draft.criteria as any[]).some((item) => item.id === target.criterionId),
+        this.session.draft.criteria.some((item) => item.id === target.criterionId),
         "NOT_FOUND",
         `Challenge criterion ${target.criterionId} was not found`,
       );
     } else if (target.type === "deliverable_requirement") {
       invariant(
-        (this.session.draft.deliverables as any[]).some(
+        this.session.draft.deliverables.some(
           (item) => item.id === target.deliverableRequirementId,
         ),
         "NOT_FOUND",
@@ -184,7 +188,7 @@ export class ChallengeEditor {
       );
     } else if (target.type === "review") {
       invariant(
-        (this.session.draft.reviews as any[]).some((item) => item.id === target.reviewId),
+        this.session.draft.reviews.some((item) => item.id === target.reviewId),
         "NOT_FOUND",
         `Challenge review ${target.reviewId} was not found`,
       );
@@ -204,5 +208,5 @@ export class ChallengeEditor {
 export type TaskChallengeEditor = ChallengeEditor;
 
 export function createChallengeEditor(session: EditorSession | TaskEditorSession): ChallengeEditor {
-  return new ChallengeEditor(session as never);
+  return new ChallengeEditor(session);
 }

@@ -1,4 +1,10 @@
-import type { ApprovalStage, Criterion, DeliverableRequirement } from "../../model/domain.js";
+import type {
+  ApprovalStage,
+  Criterion,
+  DeliverableRequirement,
+  TaskCriterion,
+  TaskDeliverableRequirement,
+} from "../../model/domain.js";
 import type { ValidationIssue } from "../../model/errors.js";
 
 export const nonEmpty = (value: string): boolean => value.trim().length > 0;
@@ -20,7 +26,17 @@ function validateArtifactIds(issues: ValidationIssue[], ids: readonly string[] |
   if (duplicates(ids).length > 0) addIssue(issues, "duplicate_artifact_requirement", path, "Artifact requirement IDs must be unique");
 }
 
-export function validateCriteria(issues: ValidationIssue[], criteria: readonly Criterion[], path: string): void {
+type ValidatableCriterion = Pick<
+  Criterion | TaskCriterion,
+  "id" | "state" | "title" | "weight" | "artifactRequirementIds"
+>;
+
+type ValidatableDeliverable = Pick<
+  DeliverableRequirement | TaskDeliverableRequirement,
+  "id" | "state" | "title" | "artifactRequirementIds"
+>;
+
+export function validateCriteria(issues: ValidationIssue[], criteria: readonly ValidatableCriterion[], path: string): void {
   validateUniqueIds(issues, criteria, path);
   for (const criterion of criteria) {
     if (!["not_started", "in_progress", "submitted", "verified", "failed", "waived"].includes(criterion.state)) addIssue(issues, "invalid_state", `${path}.${criterion.id}.state`, "Criterion state is invalid");
@@ -30,7 +46,7 @@ export function validateCriteria(issues: ValidationIssue[], criteria: readonly C
   }
 }
 
-export function validateDeliverables(issues: ValidationIssue[], deliverables: readonly DeliverableRequirement[], path: string): void {
+export function validateDeliverables(issues: ValidationIssue[], deliverables: readonly ValidatableDeliverable[], path: string): void {
   validateUniqueIds(issues, deliverables, path);
   for (const deliverable of deliverables) {
     if (!["missing", "submitted", "satisfied", "rejected", "waived"].includes(deliverable.state)) addIssue(issues, "invalid_state", `${path}.${deliverable.id}.state`, "Deliverable state is invalid");

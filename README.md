@@ -45,6 +45,7 @@ import {
   FixedTaskClock,
   SequenceTaskIdGenerator,
   TaskEditor,
+  asMilestoneId,
 } from "@timeax/milestones";
 
 const ids = new SequenceTaskIdGenerator("task-demo");
@@ -53,7 +54,7 @@ const clock = new FixedTaskClock("2026-08-20T12:00:00.000Z");
 const taskEditor = TaskEditor.create(
   {
     profile: taskProfile,
-    scope: { type: "milestone", milestoneId: "ms-1" as any },
+    scope: { type: "milestone", milestoneId: asMilestoneId("ms-1") },
     definition: { title: "Implement feature" },
     timing: {
       startsAt: "2026-08-20T12:00:00.000Z",
@@ -61,13 +62,12 @@ const taskEditor = TaskEditor.create(
       timeZone: "UTC",
     },
     reminders: [
-      { trigger: { type: "before_due", durationMinutes: 120 } },
+      { trigger: { type: "before_due", duration: "PT2H" } },
     ],
   },
   { ids, clock },
 );
 
-taskEditor.start();
 taskEditor.complete();
 const taskResult = taskEditor.commit();
 ```
@@ -79,6 +79,7 @@ import {
   BreakdownEditor,
   FixedBreakdownClock,
   SequenceBreakdownIdGenerator,
+  asMilestoneId,
 } from "@timeax/milestones";
 
 const ids = new SequenceBreakdownIdGenerator("bd-demo");
@@ -86,7 +87,7 @@ const clock = new FixedBreakdownClock("2026-08-20T12:00:00.000Z");
 
 const breakdownEditor = BreakdownEditor.create(
   {
-    parentMilestoneId: "parent-ms-1" as any,
+    parentMilestoneId: asMilestoneId("parent-ms-1"),
     definition: { title: "Phase 1 Decomposition" },
     milestones: [childMilestone1, childMilestone2],
   },

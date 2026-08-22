@@ -4,6 +4,8 @@ import type {
   ChallengeEvidenceSourceIssue,
   ChallengeEvidenceSourceResolution,
   MilestoneArtifactContext,
+  TaskArtifactContext,
+  TaskChallengeEvidence,
 } from "../model/domain.js";
 
 /**
@@ -11,8 +13,8 @@ import type {
  * audit information only; callers must not use its result as an acceptance gate.
  */
 export function resolveChallengeEvidenceSources(
-  evidence: ChallengeEvidence,
-  context?: MilestoneArtifactContext,
+  evidence: ChallengeEvidence | TaskChallengeEvidence,
+  context?: MilestoneArtifactContext | TaskArtifactContext,
 ): ChallengeEvidenceSourceResolution {
   if (context === undefined) return { evidenceId: evidence.id, status: "pending", sources: [], issues: [] };
   const expectedRole = evidence.kind === "supporting" ? "challenge_evidence" : "response_evidence";

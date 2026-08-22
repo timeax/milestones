@@ -21,7 +21,7 @@ import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/rev
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 interface DeliverableEditOptions {
@@ -36,9 +36,7 @@ interface DeliverableDefinitionEditOptions extends DeliverableEditOptions {
 export class DeliverableEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public add(
     input: Omit<DeliverableRequirement | TaskDeliverableRequirement, "id">,
@@ -48,11 +46,11 @@ export class DeliverableEditor {
     feature(this.session.profile.deliverables.enabled, "deliverables");
     requiredText(input.title, "Deliverable title");
     const id = this.session.ids.deliverableRequirement();
-    const deliverable = { id, ...clone(input) } as DeliverableRequirement;
     const isTask = isTaskSession(this.session);
     if (isTask) {
+      const deliverable = { id, ...clone(input) } as TaskDeliverableRequirement;
       beginMaterialTaskRevision(this.session, options.reason, options.actor);
-      this.session.draft.deliverables.push(deliverable as unknown as TaskDeliverableRequirement);
+      this.session.draft.deliverables.push(deliverable);
       this.session.changes.push({
         type: "deliverable_changed",
         deliverableRequirementId: deliverable.id,
@@ -60,10 +58,11 @@ export class DeliverableEditor {
       emitTask(
         this.session as TaskEditorSession,
         "task.deliverable_added",
-        { deliverable: deliverable as unknown as TaskDeliverableRequirement },
+        { deliverable },
         options.actor,
       );
     } else {
+      const deliverable = { id, ...clone(input) } as DeliverableRequirement;
       beginMaterialRevision(this.session, options.reason, options.actor);
       this.session.draft.deliverables.push(deliverable);
       this.session.changes.push({
@@ -72,7 +71,7 @@ export class DeliverableEditor {
       });
       emit(this.session as EditorSession, "deliverable.added", { deliverable }, options.actor);
     }
-    return deliverable.id;
+    return id;
   }
 
   public update(
@@ -103,7 +102,7 @@ export class DeliverableEditor {
         reason: options.reason ?? "Deliverable definition changed",
       });
     }
-    this.put(id, { ...updated, state } as any);
+    this.put(id, { ...updated, state } as DeliverableRequirement | TaskDeliverableRequirement);
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: id });
     if (isTask) {
       emitTask(this.session as TaskEditorSession, "task.deliverable_changed", { deliverableRequirementId: id, state }, options.actor);
@@ -133,20 +132,20 @@ export class DeliverableEditor {
         options.actor,
       );
     }
-    const item = {
-      id: this.session.ids.deliverableRequirement(),
-      ...clone(replacement),
-    } as DeliverableRequirement;
-    this.session.draft.deliverables[index] = item as any;
-    this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: item.id });
+    const replacementId = this.session.ids.deliverableRequirement();
+    this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: replacementId });
     if (isTask) {
+      const item = { id: replacementId, ...clone(replacement) } as TaskDeliverableRequirement;
+      (this.session as TaskEditorSession).draft.deliverables[index] = item;
       emitTask(this.session as TaskEditorSession, "task.deliverable_removed", { deliverableRequirementId: id }, options.actor);
-      emitTask(this.session as TaskEditorSession, "task.deliverable_added", { deliverable: item as any }, options.actor);
+      emitTask(this.session as TaskEditorSession, "task.deliverable_added", { deliverable: item }, options.actor);
     } else {
+      const item = { id: replacementId, ...clone(replacement) } as DeliverableRequirement;
+      (this.session as EditorSession).draft.deliverables[index] = item;
       emit(this.session as EditorSession, "deliverable.removed", { deliverableRequirementId: id }, options.actor);
       emit(this.session as EditorSession, "deliverable.added", { deliverable: item }, options.actor);
     }
-    return item.id;
+    return replacementId;
   }
 
   public remove(id: DeliverableRequirementId, options: DeliverableEditOptions = {}): void {
@@ -158,9 +157,8 @@ export class DeliverableEditor {
     } else {
       beginMaterialRevision(this.session, options.reason, options.actor);
     }
-    this.session.draft.deliverables = (this.session.draft.deliverables as any[]).filter(
-      (item) => item.id !== id,
-    );
+    if (isTaskSession(this.session)) this.session.draft.deliverables = this.session.draft.deliverables.filter((item) => item.id !== id);
+    else this.session.draft.deliverables = this.session.draft.deliverables.filter((item) => item.id !== id);
     this.session.changes.push({ type: "deliverable_changed", deliverableRequirementId: id });
     if (isTask) {
       emitTask(this.session as TaskEditorSession, "task.deliverable_removed", { deliverableRequirementId: id }, options.actor);
@@ -212,17 +210,19 @@ export class DeliverableEditor {
   }
 
   private put(id: DeliverableRequirementId, item: DeliverableRequirement | TaskDeliverableRequirement): void {
-    (this.session.draft.deliverables as any[])[this.index(id)] = clone(item);
+    const index = this.index(id);
+    if (isTaskSession(this.session)) this.session.draft.deliverables[index] = clone(item) as TaskDeliverableRequirement;
+    else this.session.draft.deliverables[index] = clone(item) as DeliverableRequirement;
   }
 
   private get(id: DeliverableRequirementId): DeliverableRequirement | TaskDeliverableRequirement {
-    const value = (this.session.draft.deliverables as any[]).find((item) => item.id === id);
+    const value = this.session.draft.deliverables.find((item) => item.id === id);
     invariant(value !== undefined, "NOT_FOUND", `Deliverable ${id} was not found`);
     return value;
   }
 
   private index(id: DeliverableRequirementId): number {
-    const index = (this.session.draft.deliverables as any[]).findIndex((item) => item.id === id);
+    const index = this.session.draft.deliverables.findIndex((item) => item.id === id);
     invariant(index >= 0, "NOT_FOUND", `Deliverable ${id} was not found`);
     return index;
   }
@@ -231,5 +231,5 @@ export class DeliverableEditor {
 export type TaskDeliverableEditor = DeliverableEditor;
 
 export function createDeliverableEditor(session: EditorSession | TaskEditorSession): DeliverableEditor {
-  return new DeliverableEditor(session as never);
+  return new DeliverableEditor(session);
 }

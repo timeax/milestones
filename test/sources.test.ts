@@ -1,6 +1,6 @@
-import type { MilestoneSourceLink } from "../src/index.js";
+import type { MilestoneSourceLink, TaskProfile, TaskSourceLink } from "../src/index.js";
 import { describe, expect, it } from "vitest";
-import { MilestoneEditor } from "../src/index.js";
+import { asTaskProfileId, FixedTaskClock, MilestoneEditor, SequenceTaskIdGenerator, TaskEditor } from "../src/index.js";
 import { create } from "./helpers.js";
 
 function source(subject: MilestoneSourceLink["subject"], role: MilestoneSourceLink["role"] = "context", id = "source-link"): MilestoneSourceLink {
@@ -44,15 +44,50 @@ describe("milestone Sources", () => {
     // Open a new editor session where revId is now committed/historical
     const ed2 = new MilestoneEditor(committed, h.profile, h);
 
-    expect(() => ed2.sources.remove(srcId as never)).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.remove(srcId)).toThrow("Sources on historical revisions are immutable");
     expect(() =>
       ed2.sources.replace(
-        srcId as never,
+        srcId,
         source({ type: "milestone_revision", id: revId }, "decision", "replacement-src"),
       ),
     ).toThrow("Sources on historical revisions are immutable");
-    expect(() => ed2.sources.updateRole(srcId as never, "specification")).toThrow("Sources on historical revisions are immutable");
-    expect(() => ed2.sources.update(srcId as never, { note: "New note" })).toThrow("Sources on historical revisions are immutable");
-    expect(() => ed2.sources.remove("non-existent-source" as never)).toThrow("Source link non-existent-source was not found");
+    expect(() => ed2.sources.updateRole(srcId, "specification")).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.update(srcId, { note: "New note" })).toThrow("Sources on historical revisions are immutable");
+    expect(() => ed2.sources.remove("non-existent-source")).toThrow("Source link non-existent-source was not found");
+  });
+});
+
+describe("task Sources", () => {
+  it("keeps Sources on committed Task revisions historically immutable", () => {
+    const taskProfile: TaskProfile = {
+      ref: { id: asTaskProfileId("task-source-profile"), version: 1 },
+      criteria: { enabled: false }, deliverables: { enabled: false },
+      dependencies: { enabled: false, participatesInGraph: false }, revisions: { enabled: true },
+      challenges: { enabled: false }, reviews: { enabled: false, required: false },
+      approvals: { enabled: false, required: false },
+      completion: { enabled: true, requiresAcceptance: false, closeImmediatelyOnAcceptance: false },
+    };
+    const dependencies = {
+      clock: new FixedTaskClock("2026-08-20T00:00:00.000Z"),
+      ids: new SequenceTaskIdGenerator("task-source"),
+    };
+    const first = TaskEditor.create(
+      { profile: taskProfile, scope: { type: "project", projectId: "source-project" }, definition: { title: "Source task" } },
+      dependencies,
+    );
+    const revisionId = first.revisions.begin("Attach historical Source");
+    const sourceId = "task-revision-source";
+    const revisionSource: TaskSourceLink = {
+      schemaVersion: "1.1", id: sourceId, artifactId: "artifact", artifactVersionId: "version",
+      subject: { type: "task_revision", id: revisionId }, role: "decision",
+      createdBy: { type: "user", id: "author" }, createdAt: "2026-08-20T00:00:00.000Z",
+    };
+    first.sources.attach(revisionSource);
+    const second = TaskEditor.open(first.commit().task, taskProfile, dependencies);
+
+    expect(() => second.sources.remove(sourceId)).toThrow("Sources on historical revisions are immutable");
+    expect(() => second.sources.replace(sourceId, { ...revisionSource, id: "replacement" })).toThrow("Sources on historical revisions are immutable");
+    expect(() => second.sources.updateRole(sourceId, "specification")).toThrow("Sources on historical revisions are immutable");
+    expect(() => second.sources.update(sourceId, { note: "rewrite" })).toThrow("Sources on historical revisions are immutable");
   });
 });

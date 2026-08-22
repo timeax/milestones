@@ -12,7 +12,12 @@ import type {
 import { invariant } from "../../model/errors.js";
 import { defaultEvaluationPolicy } from "../../services/evaluation.js";
 import { defaultTaskEvaluationPolicy } from "../../services/task-evaluation.js";
-import { resolveSources, sourceLinksForRevision } from "../../services/sources.js";
+import {
+  resolveSources,
+  resolveTaskSources,
+  sourceLinksForRevision,
+  sourceLinksForTaskRevision,
+} from "../../services/sources.js";
 import { emit, emitTask } from "./events.js";
 import { authorize, authorizeTask, clone, ensureOpen, feature, requiredText } from "./helpers.js";
 import type { EditorSession, TaskEditorSession } from "./session.js";
@@ -140,10 +145,10 @@ export function createTaskRevisionSnapshot(session: TaskEditorSession): TaskRevi
     criteria: session.draft.criteria.map(({ state: _state, ...definition }) => clone(definition)),
     deliverables: session.draft.deliverables.map(({ state: _state, ...definition }) => clone(definition)),
     dependencies: clone(session.draft.dependencies),
-    sources: resolveSources(
-      sourceLinksForRevision(session.draft as unknown as import("../../model/domain.js").Milestone, session.draft.currentRevisionId) as unknown as import("../../model/domain.js").MilestoneSourceLink[],
-      session.artifacts as unknown as import("../../model/domain.js").MilestoneArtifactContext,
-    ) as unknown as import("../../model/domain.js").TaskSourceSnapshot[],
+    sources: resolveTaskSources(
+      sourceLinksForTaskRevision(session.draft, session.draft.currentRevisionId),
+      session.artifacts,
+    ),
     ...(session.draft.approvalPolicy === undefined
       ? {}
       : { approvalPolicy: clone(session.draft.approvalPolicy) }),

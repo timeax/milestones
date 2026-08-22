@@ -87,14 +87,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
       addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger`, "Reminder trigger is invalid");
     } else {
       if (reminder.trigger.type === "at") {
-        const atVal = reminder.trigger.at ?? reminder.trigger.date;
-        if (typeof atVal !== "string" || !nonEmpty(atVal)) {
-          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.at`, "Reminder timestamp must be non-empty");
+        if (!Number.isFinite(Date.parse(reminder.trigger.at))) {
+          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.at`, "Reminder timestamp must be valid");
         }
       } else if (reminder.trigger.type === "before_due" || reminder.trigger.type === "after_start") {
-        const durVal = reminder.trigger.duration ?? (reminder.trigger.durationMinutes !== undefined ? String(reminder.trigger.durationMinutes) : undefined);
-        if (typeof durVal !== "string" || !nonEmpty(durVal)) {
-          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.duration`, "Reminder duration must be specified");
+        if (!/^P(?!$)/u.test(reminder.trigger.duration)) {
+          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.duration`, "Reminder duration must be an ISO 8601 duration");
         }
       }
     }
@@ -117,8 +115,8 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     }
   }
 
-  validateCriteria(issues, task.criteria as unknown as import("../../model/domain.js").Criterion[], "criteria");
-  validateDeliverables(issues, task.deliverables as unknown as import("../../model/domain.js").DeliverableRequirement[], "deliverables");
+  validateCriteria(issues, task.criteria, "criteria");
+  validateDeliverables(issues, task.deliverables, "deliverables");
   validateTaskSources(issues, task);
 
   // Dependencies validation
@@ -324,7 +322,7 @@ function validateTaskSources(issues: ValidationIssue[], task: Task): void {
   for (const [path, links, type, id] of entries) {
     for (const link of links ?? []) {
       try {
-        assertValidSourceLink(link as unknown as import("../../model/domain.js").MilestoneSourceLink);
+        assertValidSourceLink(link);
       } catch (error) {
         addIssue(issues, "invalid_source_link", `${path}.${link.id}`, error instanceof Error ? error.message : "Invalid Source link");
       }

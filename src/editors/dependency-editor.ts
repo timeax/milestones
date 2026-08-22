@@ -20,9 +20,7 @@ interface DependencyEditOptions {
 export class DependencyEditor {
   private readonly session: EditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession;
-  }
+  public constructor(session: EditorSession) { this.session = session; }
 
   public add(
     dependsOnMilestoneId: Milestone["id"],
@@ -108,5 +106,5 @@ export class DependencyEditor {
 }
 
 export function createDependencyEditor(session: EditorSession): DependencyEditor {
-  return new DependencyEditor(session as never);
+  return new DependencyEditor(session);
 }

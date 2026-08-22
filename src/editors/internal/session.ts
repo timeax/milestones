@@ -37,6 +37,7 @@ import type { DraftBreakdown, DraftMilestone, DraftTask } from "./draft.js";
 export type EditorOptions = MilestoneEditorOptions;
 
 export interface EditorHistorySnapshot {
+  readonly aggregateType: "milestone";
   readonly draft: DraftMilestone;
   readonly profile: MilestoneProfile;
   readonly changes: readonly MilestoneChange[];
@@ -54,6 +55,7 @@ export interface EditorHistoryState<TSnapshot = EditorHistorySnapshot> {
 }
 
 export interface EditorSession {
+  readonly aggregateType: "milestone";
   readonly original: Milestone;
   draft: DraftMilestone;
   profile: MilestoneProfile;
@@ -74,6 +76,7 @@ export interface EditorSession {
 }
 
 export interface TaskEditorHistorySnapshot {
+  readonly aggregateType: "task";
   readonly draft: DraftTask;
   readonly profile: TaskProfile;
   readonly changes: readonly TaskChange[];
@@ -83,6 +86,7 @@ export interface TaskEditorHistorySnapshot {
 }
 
 export interface TaskEditorSession {
+  readonly aggregateType: "task";
   readonly original: Task;
   draft: DraftTask;
   profile: TaskProfile;
@@ -103,12 +107,14 @@ export interface TaskEditorSession {
 }
 
 export interface BreakdownEditorHistorySnapshot {
+  readonly aggregateType: "breakdown";
   readonly draft: DraftBreakdown;
   readonly changes: readonly BreakdownChange[];
   readonly events: readonly BreakdownEvent[];
 }
 
 export interface BreakdownEditorSession {
+  readonly aggregateType: "breakdown";
   readonly original: Breakdown;
   draft: DraftBreakdown;
   readonly clock: BreakdownClock;

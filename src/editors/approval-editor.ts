@@ -7,11 +7,16 @@ import type {
   ApprovalStage,
   ApprovalStageId,
   ApprovalWaivedRecord,
+  TaskApprovalGrantedRecord,
+  TaskApprovalRecord,
+  TaskApprovalRejectedRecord,
+  TaskApprovalRevokedRecord,
+  TaskApprovalWaivedRecord,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 import { evaluateApprovalStage } from "../services/evaluation.js";
 import { evaluateTaskApprovalStage } from "../services/task-evaluation.js";
-import { assertRevocableApproval } from "../services/transitions/approvals.js";
+import { assertRevocableApproval, assertRevocableTaskApproval } from "../services/transitions/approvals.js";
 import { emit, emitTask } from "./internal/events.js";
 import {
   authorize,
@@ -31,7 +36,7 @@ import {
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 interface ApprovalStageEditOptions {
@@ -42,9 +47,7 @@ interface ApprovalStageEditOptions {
 export class ApprovalEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public grant(stageId: ApprovalStageId, actor: ActorRef): ApprovalRecordId {
     ensureOpen(this.session);
@@ -65,9 +68,11 @@ export class ApprovalEditor {
   public revoke(approvalId: ApprovalRecordId, actor: ActorRef, reason?: string): ApprovalRecordId {
     ensureOpen(this.session);
     feature(this.session.profile.approvals.enabled, "approvals");
-    const approval = assertRevocableApproval(this.session.draft as any, approvalId);
-    const authorityStage = this.stage(approval.stageId);
     const isTask = isTaskSession(this.session);
+    const approval = isTask
+      ? assertRevocableTaskApproval(this.session.draft, approvalId)
+      : assertRevocableApproval((this.session as EditorSession).draft, approvalId);
+    const authorityStage = this.stage(approval.stageId);
     if (isTask) {
       authorizeTask(this.session as TaskEditorSession, "approval.revoke", actor, {
         type: "approval_record",
@@ -83,54 +88,48 @@ export class ApprovalEditor {
         ...(authorityStage.authorityRef === undefined ? {} : { authorityRef: authorityStage.authorityRef }),
       });
     }
-    const record = {
-      id: this.session.ids.approvalRecord(),
-      type: "revoked" as const,
-      ...(isTask
-        ? { taskId: this.session.draft.id, taskRevisionId: this.session.draft.currentRevisionId }
-        : { milestoneId: this.session.draft.id, milestoneRevisionId: this.session.draft.currentRevisionId }),
-      stageId: approval.stageId,
-      actor,
-      revokesApprovalId: approvalId,
-      ...(reason === undefined ? {} : { reason }),
-      createdAt: this.session.clock.now(),
-    };
-    (this.session.draft.approvalRecords as any[]).push(record);
-    this.session.changes.push({ type: "approval_recorded", approvalRecordId: record.id });
+    const recordId = this.session.ids.approvalRecord();
+    this.session.changes.push({ type: "approval_recorded", approvalRecordId: recordId });
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.approval_revoked", { record: record as any }, actor);
+      const session = this.session as TaskEditorSession;
+      const record: TaskApprovalRevokedRecord = { id: recordId, type: "revoked", taskId: session.draft.id, taskRevisionId: session.draft.currentRevisionId, stageId: approval.stageId, actor, revokesApprovalId: approvalId, ...(reason === undefined ? {} : { reason }), createdAt: session.clock.now() };
+      session.draft.approvalRecords.push(record);
+      emitTask(session, "task.approval_revoked", { record }, actor);
     } else {
-      emit(this.session as EditorSession, "approval.revoked", { record: record as any }, actor);
+      const session = this.session as EditorSession;
+      const record = { id: recordId, type: "revoked" as const, milestoneId: session.draft.id, milestoneRevisionId: session.draft.currentRevisionId, stageId: approval.stageId, actor, revokesApprovalId: approvalId, ...(reason === undefined ? {} : { reason }), createdAt: session.clock.now() };
+      session.draft.approvalRecords.push(record);
+      emit(session, "approval.revoked", { record }, actor);
     }
     const stage = this.stage(approval.stageId);
     if (isTask) {
       if (
         stage.required &&
-        !evaluateTaskApprovalStage(this.session.draft as any, stage).satisfied &&
+        !evaluateTaskApprovalStage(this.session.draft, stage).satisfied &&
         this.session.draft.currentAcceptanceId !== undefined
       ) {
         applyTaskReopen(this.session as TaskEditorSession, {
           effect: "invalidate_acceptance_and_completion",
           reason: `Required approval ${approvalId} was revoked`,
           actor,
-          cause: { type: "approval_revocation", approvalRecordId: record.id },
+          cause: { type: "approval_revocation", approvalRecordId: recordId },
         });
       }
     } else {
       if (
         stage.required &&
-        !evaluateApprovalStage(this.session.draft as any, stage).satisfied &&
+        !evaluateApprovalStage((this.session as EditorSession).draft, stage).satisfied &&
         this.session.draft.currentAcceptanceId !== undefined
       ) {
         applyReopen(this.session as EditorSession, {
           effect: "invalidate_acceptance_and_completion",
           reason: `Required approval ${approvalId} was revoked`,
           actor,
-          cause: { type: "approval_revocation", approvalRecordId: record.id },
+          cause: { type: "approval_revocation", approvalRecordId: recordId },
         });
       }
     }
-    return record.id;
+    return recordId;
   }
 
   public addStage(
@@ -255,7 +254,7 @@ export class ApprovalEditor {
     if (type === "granted") {
       invariant(
         !effectiveDuplicate(
-          this.session.draft.approvalRecords as any,
+          this.session.draft.approvalRecords,
           stageId,
           this.session.draft.currentRevisionId,
           actor,
@@ -264,25 +263,22 @@ export class ApprovalEditor {
         "Actor already has an effective approval for this stage and revision",
       );
     }
-    const record = {
-      id: this.session.ids.approvalRecord(),
-      type,
-      ...(isTask
-        ? { taskId: this.session.draft.id, taskRevisionId: this.session.draft.currentRevisionId }
-        : { milestoneId: this.session.draft.id, milestoneRevisionId: this.session.draft.currentRevisionId }),
-      stageId,
-      actor,
-      ...(reason === undefined ? {} : { reason }),
-      createdAt: this.session.clock.now(),
-    } as ApprovalGrantedRecord | ApprovalRejectedRecord | ApprovalWaivedRecord;
-    (this.session.draft.approvalRecords as any[]).push(record);
-    this.session.changes.push({ type: "approval_recorded", approvalRecordId: record.id });
+    const recordId = this.session.ids.approvalRecord();
+    this.session.changes.push({ type: "approval_recorded", approvalRecordId: recordId });
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.approval_recorded", { record: record as any }, actor);
+      const session = this.session as TaskEditorSession;
+      const common = { id: recordId, taskId: session.draft.id, taskRevisionId: session.draft.currentRevisionId, stageId, actor, createdAt: session.clock.now() };
+      const record: TaskApprovalGrantedRecord | TaskApprovalRejectedRecord | TaskApprovalWaivedRecord = type === "granted" ? { ...common, type } : type === "rejected" ? { ...common, type, ...(reason === undefined ? {} : { reason }) } : { ...common, type, reason: reason! };
+      session.draft.approvalRecords.push(record);
+      emitTask(session, "task.approval_recorded", { record }, actor);
     } else {
-      emit(this.session as EditorSession, "approval.recorded", { record }, actor);
+      const session = this.session as EditorSession;
+      const common = { id: recordId, milestoneId: session.draft.id, milestoneRevisionId: session.draft.currentRevisionId, stageId, actor, createdAt: session.clock.now() };
+      const record: ApprovalGrantedRecord | ApprovalRejectedRecord | ApprovalWaivedRecord = type === "granted" ? { ...common, type } : type === "rejected" ? { ...common, type, ...(reason === undefined ? {} : { reason }) } : { ...common, type, reason: reason! };
+      session.draft.approvalRecords.push(record);
+      emit(session, "approval.recorded", { record }, actor);
     }
-    return record.id;
+    return recordId;
   }
 
   private stage(id: ApprovalStageId): ApprovalStage {
@@ -295,11 +291,11 @@ export class ApprovalEditor {
 export type TaskApprovalEditor = ApprovalEditor;
 
 export function createApprovalEditor(session: EditorSession | TaskEditorSession): ApprovalEditor {
-  return new ApprovalEditor(session as never);
+  return new ApprovalEditor(session);
 }
 
 function effectiveDuplicate(
-  records: readonly ApprovalRecord[],
+  records: readonly (ApprovalRecord | TaskApprovalRecord)[],
   stageId: ApprovalStageId,
   revisionId: string,
   actor: ActorRef,
@@ -308,14 +304,14 @@ function effectiveDuplicate(
     (record) =>
       record.type === "granted" &&
       record.stageId === stageId &&
-      (((record as any).milestoneRevisionId ?? (record as any).taskRevisionId) === revisionId) &&
+      (("taskRevisionId" in record ? record.taskRevisionId : record.milestoneRevisionId) === revisionId) &&
       record.actor.id === actor.id &&
       record.actor.type === actor.type,
   );
   const revoked = new Set(
     records
       .filter((record) => record.type === "revoked")
-      .map((record) => (record as any).revokesApprovalId),
+      .map((record) => record.revokesApprovalId),
   );
   return grants.some((grant) => !revoked.has(grant.id));
 }

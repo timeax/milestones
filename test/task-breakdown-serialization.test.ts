@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import {
   FixedBreakdownClock,
   FixedTaskClock,
@@ -63,6 +65,13 @@ const testMilestoneProfile: MilestoneProfile = {
 };
 
 describe("Task & Breakdown Serialization & Migrations", () => {
+  it("round-trips frozen Task 1.0 and Breakdown 1.0 golden fixtures", async () => {
+    const fixtures = fileURLToPath(new URL("fixtures/", import.meta.url));
+    const taskWire = JSON.parse(await readFile(`${fixtures}task-full-v1.json`, "utf8"));
+    const breakdownWire = JSON.parse(await readFile(`${fixtures}breakdown-full-v1.json`, "utf8"));
+    expect(serializeTask(deserializeTask(taskWire))).toEqual(taskWire);
+    expect(serializeBreakdown(deserializeBreakdown(breakdownWire))).toEqual(breakdownWire);
+  });
   it("serializes and deserializes Task wire and JSON representations accurately", () => {
     const clock = new FixedTaskClock("2026-08-20T12:00:00.000Z");
     const ids = new SequenceTaskIdGenerator();
@@ -73,7 +82,7 @@ describe("Task & Breakdown Serialization & Migrations", () => {
         scope: { type: "project", projectId: "proj-ser" },
         definition: { title: "Serialization Task", description: "Test wire 1.0" },
         timing: { startsAt: "2026-08-20T12:00:00.000Z", dueAt: "2026-08-25T12:00:00.000Z" },
-        reminders: [{ trigger: { type: "at", date: "2026-08-24T12:00:00.000Z" } }],
+        reminders: [{ trigger: { type: "at", at: "2026-08-24T12:00:00.000Z" } }],
       },
       { clock, ids },
     ).commit();

@@ -3,7 +3,10 @@ import type {
   ChallengeEvidenceId,
   ChallengeEvidenceKind,
   ChallengeId,
-  Milestone,
+  ChallengeEvidence,
+  MilestoneChallenge,
+  TaskChallenge,
+  TaskChallengeEvidence,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 import { emit, emitTask } from "./internal/events.js";
@@ -12,8 +15,10 @@ import type { Mutable } from "./internal/draft.js";
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
+type MutableTaskChallenge = Omit<Mutable<TaskChallenge>, "evidence"> & { evidence: Mutable<TaskChallengeEvidence>[] };
+type MutableMilestoneChallenge = Omit<Mutable<MilestoneChallenge>, "evidence"> & { evidence: Mutable<ChallengeEvidence>[] };
 
 export interface ChallengeEvidenceInput {
   readonly kind: ChallengeEvidenceKind;
@@ -24,9 +29,7 @@ export interface ChallengeEvidenceInput {
 /** Command-only editor facade. Read/query APIs belong on direct readers, not this proxy-wrapped facade. */
 export class EvidenceEditor {
   private readonly session: EditorSession | TaskEditorSession;
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public add(
     challengeId: ChallengeId,
@@ -49,14 +52,15 @@ export class EvidenceEditor {
         challengeId,
       });
     }
-    const revisionId = (challenge as any).taskRevisionId ?? challenge.milestoneRevisionId;
+    const revisionId = "taskRevisionId" in challenge ? challenge.taskRevisionId : challenge.milestoneRevisionId;
     const evidence = this.newEvidence(challengeId, revisionId, input, actor);
-    challenge.evidence.push(evidence as any);
+    if (isTask) (challenge as MutableTaskChallenge).evidence.push(evidence as TaskChallengeEvidence);
+    else (challenge as MutableMilestoneChallenge).evidence.push(evidence as ChallengeEvidence);
     this.changed(challengeId, evidence.id);
     if (isTask) {
-      emitTask(this.session as TaskEditorSession, "task.challenge_evidence_added", { evidence: evidence as any }, actor);
+      emitTask(this.session as TaskEditorSession, "task.challenge_evidence_added", { evidence: evidence as TaskChallengeEvidence }, actor);
     } else {
-      emit(this.session as EditorSession, "challenge.evidence_added", { evidence: evidence as any }, actor);
+      emit(this.session as EditorSession, "challenge.evidence_added", { evidence: evidence as ChallengeEvidence }, actor);
     }
     return evidence.id;
   }
@@ -89,24 +93,25 @@ export class EvidenceEditor {
         challengeEvidenceId: evidenceId,
       });
     }
-    const revisionId = (found.challenge as any).taskRevisionId ?? found.challenge.milestoneRevisionId;
+    const revisionId = "taskRevisionId" in found.challenge ? found.challenge.taskRevisionId : found.challenge.milestoneRevisionId;
     const successor = this.newEvidence(found.challenge.id, revisionId, input, actor, evidenceId);
     found.evidence.state = "superseded";
-    found.challenge.evidence.push(successor as any);
+    if (isTask) (found.challenge as MutableTaskChallenge).evidence.push(successor as TaskChallengeEvidence);
+    else (found.challenge as MutableMilestoneChallenge).evidence.push(successor as ChallengeEvidence);
     this.changed(found.challenge.id, evidenceId);
     this.changed(found.challenge.id, successor.id);
     if (isTask) {
       emitTask(
         this.session as TaskEditorSession,
         "task.challenge_evidence_superseded",
-        { previousEvidenceId: evidenceId, evidence: successor as any },
+        { previousEvidenceId: evidenceId, evidence: successor as TaskChallengeEvidence },
         actor,
       );
     } else {
       emit(
         this.session as EditorSession,
         "challenge.evidence_superseded",
-        { previousEvidenceId: evidenceId, evidence: successor as any },
+        { previousEvidenceId: evidenceId, evidence: successor as ChallengeEvidence },
         actor,
       );
     }
@@ -192,17 +197,17 @@ export class EvidenceEditor {
   }
 
   private challenge(id: ChallengeId) {
-    const challenge = (this.session.draft.challenges as any[]).find((value) => value.id === id);
+    const challenge = this.session.draft.challenges.find((value) => value.id === id);
     invariant(challenge !== undefined, "NOT_FOUND", `Challenge ${id} was not found`);
     return challenge;
   }
 
   private evidence(id: ChallengeEvidenceId): {
     challenge: ReturnType<EvidenceEditor["challenge"]>;
-    evidence: Mutable<Milestone["challenges"][number]["evidence"][number]>;
+    evidence: Mutable<ChallengeEvidence> | Mutable<TaskChallengeEvidence>;
   } {
-    for (const challenge of this.session.draft.challenges as any[]) {
-      const evidence = challenge.evidence.find((value: any) => value.id === id);
+    for (const challenge of this.session.draft.challenges) {
+      const evidence = challenge.evidence.find((value) => value.id === id);
       if (evidence !== undefined) return { challenge, evidence };
     }
     invariant(false, "NOT_FOUND", `Evidence ${id} was not found`);
@@ -220,5 +225,5 @@ export class EvidenceEditor {
 export type TaskEvidenceEditor = EvidenceEditor;
 
 export function createEvidenceEditor(session: EditorSession | TaskEditorSession): EvidenceEditor {
-  return new EvidenceEditor(session as never);
+  return new EvidenceEditor(session);
 }

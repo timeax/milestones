@@ -2,6 +2,8 @@ import type {
   ApprovalGrantedRecord,
   ApprovalRecordId,
   Milestone,
+  Task,
+  TaskApprovalGrantedRecord,
 } from "../../model/domain.js";
 import { invariant } from "../../model/errors.js";
 
@@ -37,5 +39,15 @@ export function assertRevocableApproval(
     "INVALID_STATE_TRANSITION",
     `Approval ${approvalId} is already revoked`,
   );
+  return approval;
+}
+
+export function assertRevocableTaskApproval(task: Task, approvalId: ApprovalRecordId): TaskApprovalGrantedRecord {
+  const approval = task.approvalRecords.find((item) => item.id === approvalId);
+  invariant(approval?.type === "granted", "INVALID_ARGUMENT", `Approval ${approvalId} is not a granted approval`);
+  invariant(approval.taskId === task.id, "INVALID_ARGUMENT", `Approval ${approvalId} belongs to another Task`);
+  invariant(task.approvalPolicy?.stages.some((stage) => stage.id === approval.stageId), "INVALID_ARGUMENT", `Approval ${approvalId} belongs to an unknown approval stage`);
+  invariant(approval.taskRevisionId === task.currentRevisionId, "INVALID_ARGUMENT", "Only an approval for the current Task revision can be revoked");
+  invariant(!task.approvalRecords.some((item) => item.type === "revoked" && item.revokesApprovalId === approvalId), "INVALID_STATE_TRANSITION", `Approval ${approvalId} is already revoked`);
   return approval;
 }

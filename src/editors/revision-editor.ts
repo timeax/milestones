@@ -16,15 +16,13 @@ import { beginMaterialRevision, beginMaterialTaskRevision } from "./internal/rev
 import type { EditorSession, TaskEditorSession } from "./internal/session.js";
 
 function isTaskSession(session: EditorSession | TaskEditorSession): session is TaskEditorSession {
-  return "scope" in session.draft;
+  return session.aggregateType === "task";
 }
 
 export class RevisionEditor {
   private readonly session: EditorSession | TaskEditorSession;
 
-  public constructor(session: never) {
-    this.session = session as EditorSession | TaskEditorSession;
-  }
+  public constructor(session: EditorSession | TaskEditorSession) { this.session = session; }
 
   public begin(reason: string, actor?: ActorRef): MilestoneRevisionId | TaskRevisionId {
     ensureOpen(this.session);
@@ -75,5 +73,5 @@ export class RevisionEditor {
 export type TaskRevisionEditor = RevisionEditor;
 
 export function createRevisionEditor(session: EditorSession | TaskEditorSession): RevisionEditor {
-  return new RevisionEditor(session as never);
+  return new RevisionEditor(session);
 }
