@@ -13,7 +13,7 @@ import type {
   TaskRevisionId,
 } from "../model/domain.js";
 import type { ValidationIssue } from "../model/errors.js";
-import { MilestoneDomainError } from "../model/errors.js";
+import { invariant, MilestoneDomainError } from "../model/errors.js";
 
 export interface TaskGateState {
   readonly criteria: ReadonlyMap<CriterionId, CriterionGateState>;
@@ -155,8 +155,8 @@ export function validateTaskGraph(graph: TaskGraphSnapshot): readonly Validation
           message: `Missing upstream deliverable ${dependency.gate.deliverableRequirementId}`,
         });
       }
-    } else if (dependency.dependsOn.type === "milestone" && graph.milestones !== undefined) {
-      const upstream = graph.milestones.get(dependency.dependsOn.id);
+    } else if (dependency.dependsOn.type === "milestone") {
+      const upstream = graph.milestones?.get(dependency.dependsOn.id);
       if (upstream === undefined) {
         issues.push({
           code: "missing_graph_node",
@@ -206,6 +206,68 @@ export function assertValidTaskGraph(graph: TaskGraphSnapshot): void {
       issues.some((issue) => issue.code === "dependency_cycle") ? "DEPENDENCY_CYCLE" : "INVALID_ARGUMENT",
       "Invalid task dependency graph",
       { issues },
+    );
+  }
+}
+
+function taskDependencyKey(dependency: TaskDependency): string {
+  const gateTarget = dependency.gate.type === "criterion"
+    ? dependency.gate.criterionId
+    : dependency.gate.type === "deliverable"
+      ? dependency.gate.deliverableRequirementId
+      : "";
+  return [
+    dependency.id,
+    dependency.taskId,
+    dependency.dependsOn.type,
+    dependency.dependsOn.id,
+    dependency.gate.type,
+    gateTarget,
+    String(dependency.blocking),
+  ].join("|");
+}
+
+function gateMapMatches<T extends { readonly state: string }>(
+  expected: ReadonlyMap<string, T>,
+  actual: ReadonlyMap<string, T>,
+): boolean {
+  return expected.size === actual.size && [...expected].every(
+    ([id, gate]) => actual.get(id)?.state === gate.state,
+  );
+}
+
+/** Validates that a graph is structurally valid and current for one Task DOM. */
+export function assertTaskGraphContextCoherent(task: Task, graph: TaskGraphSnapshot): void {
+  assertValidTaskGraph(graph);
+  const actualNode = graph.tasks.get(task.id);
+  invariant(actualNode !== undefined, "MISSING_GRAPH_NODE", `Graph does not contain task ${task.id}`, { taskId: task.id });
+  const expectedNode = graphNodeFromTask(task);
+  invariant(
+    actualNode.revisionId === expectedNode.revisionId &&
+      actualNode.gates.accepted === expectedNode.gates.accepted &&
+      actualNode.gates.completed === expectedNode.gates.completed &&
+      gateMapMatches(expectedNode.gates.criteria, actualNode.gates.criteria) &&
+      gateMapMatches(expectedNode.gates.deliverables, actualNode.gates.deliverables),
+    "INVALID_ARGUMENT",
+    `Graph node for task ${task.id} is stale`,
+    { taskId: task.id },
+  );
+  const graphDependencies = graph.dependencies.filter((dependency) => dependency.taskId === task.id);
+  invariant(
+    graphDependencies.length === task.dependencies.length,
+    "INVALID_ARGUMENT",
+    `Graph dependencies are stale for task ${task.id}`,
+    { taskId: task.id, expectedCount: task.dependencies.length, actualCount: graphDependencies.length },
+  );
+  const graphById = new Map(graphDependencies.map((dependency) => [dependency.id, dependency]));
+  for (const expected of task.dependencies) {
+    const actual = graphById.get(expected.id);
+    invariant(actual !== undefined, "INVALID_ARGUMENT", `Graph is missing dependency ${expected.id}`, { taskId: task.id, dependencyId: expected.id });
+    invariant(
+      taskDependencyKey(actual) === taskDependencyKey(expected),
+      "INVALID_ARGUMENT",
+      `Graph dependency ${expected.id} does not match the Task dependency`,
+      { taskId: task.id, dependencyId: expected.id },
     );
   }
 }

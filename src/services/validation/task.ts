@@ -49,6 +49,7 @@ function validateTaskExecutionSnapshot(
   revision: TaskRevision,
   task: Task,
   evaluatedAt: string,
+  evaluatedSequence: number,
   path: string,
 ): void {
   if (snapshot.revisionId !== revision.id) {
@@ -58,8 +59,8 @@ function validateTaskExecutionSnapshot(
     ["criteria", snapshot.criteria.map((value) => value.id), new Set(revision.snapshot.criteria.map((value) => value.id)), true],
     ["deliverables", snapshot.deliverables.map((value) => value.id), new Set(revision.snapshot.deliverables.map((value) => value.id)), true],
     ["dependencies", snapshot.dependencies.map((value) => value.id), new Set(revision.snapshot.dependencies.map((value) => value.id)), true],
-    ["challenges", snapshot.challenges.map((value) => value.id), new Set(task.challenges.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id)), false],
-    ["reviews", snapshot.reviews.map((value) => value.id), new Set(task.reviews.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id)), false],
+    ["challenges", snapshot.challenges.map((value) => value.id), new Set(task.challenges.filter((value) => value.taskRevisionId === revision.id && value.createdSequence < evaluatedSequence).map((value) => value.id)), true],
+    ["reviews", snapshot.reviews.map((value) => value.id), new Set(task.reviews.filter((value) => value.taskRevisionId === revision.id && value.createdSequence < evaluatedSequence).map((value) => value.id)), true],
     ["approvals", snapshot.approvals.map((value) => value.stageId), new Set(revision.snapshot.approvalPolicy?.stages.map((value) => value.id) ?? []), true],
   ];
   for (const [name, ids, validIds, exact] of checks) {
@@ -108,9 +109,12 @@ function validateTaskExecutionSnapshot(
     const expectedBlocking = policy.blockingChallengesPreventAcceptance && value.severity === "blocking" && (value.state === "open" || value.state === "under_review" || value.state === "reopened");
     if (value.blocking !== expectedBlocking) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.blocking`, "Challenge blocking state does not match its historical state and revision policy");
     if (duplicates(value.evidence.map((item) => item.id)).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.challenges.${value.id}.evidence`, "Challenge evidence snapshot IDs must be unique");
+    const expectedEvidenceIds = new Set(challenge?.evidence.filter((item) => item.createdSequence < evaluatedSequence).map((item) => item.id) ?? []);
+    const actualEvidenceIds = new Set(value.evidence.map((item) => item.id));
+    for (const id of expectedEvidenceIds) if (!actualEvidenceIds.has(id)) addIssue(issues, "incomplete_acceptance_snapshot", `${path}.challenges.${value.id}.evidence`, `Task evaluation snapshot is missing Challenge evidence ${id}`);
     for (const evidence of value.evidence) {
       const record = challenge?.evidence.find((item) => item.id === evidence.id);
-      if (record === undefined) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.challenges.${value.id}.evidence`, `Task evaluation snapshot references missing Challenge evidence ${evidence.id}`);
+      if (record === undefined || !expectedEvidenceIds.has(evidence.id)) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.challenges.${value.id}.evidence`, `Task evaluation snapshot references Challenge evidence ${evidence.id} that did not exist at evaluation sequence`);
       else {
         if (record.kind !== evidence.kind || record.title !== evidence.title || record.description !== evidence.description || record.supersedesEvidenceId !== evidence.supersedesEvidenceId) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.evidence.${evidence.id}`, "Challenge evidence snapshot does not match its immutable definition");
         if (definitelyAfter(record.createdAt, evaluatedAt)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.evidence.${evidence.id}`, "Challenge evidence did not exist when the Task evaluation was recorded");
@@ -147,6 +151,114 @@ function definitelyAfter(value: string, boundary: string): boolean {
   return valueTime !== undefined && boundaryTime !== undefined && valueTime > boundaryTime;
 }
 
+function equalDomainValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => equalDomainValue(value, right[index]));
+  }
+  if (left !== null && right !== null && typeof left === "object" && typeof right === "object") {
+    const leftRecord = left as Readonly<Record<string, unknown>>;
+    const rightRecord = right as Readonly<Record<string, unknown>>;
+    const leftKeys = Object.keys(leftRecord).sort();
+    const rightKeys = Object.keys(rightRecord).sort();
+    return equalDomainValue(leftKeys, rightKeys) && leftKeys.every((key) => equalDomainValue(leftRecord[key], rightRecord[key]));
+  }
+  return false;
+}
+
+function definitionWithoutMutableState(value: Record<string, unknown>): Record<string, unknown> {
+  const { state: _state, sourceLinks: _sourceLinks, ...definition } = value;
+  const requirementIds = definition["artifactRequirementIds"];
+  return Array.isArray(requirementIds)
+    ? { ...definition, artifactRequirementIds: requirementIds.filter((id): id is string => typeof id === "string").sort() }
+    : definition;
+}
+
+function isIdCollection(value: unknown): value is readonly { readonly id: string }[] {
+  return Array.isArray(value) && value.every(
+    (item: unknown) => typeof item === "object" && item !== null && "id" in item && typeof item.id === "string",
+  );
+}
+
+function sameIdCollection(
+  live: unknown,
+  snapshot: unknown,
+  project: (value: { readonly id: string }) => unknown = (value) => value,
+): boolean {
+  if (!isIdCollection(live) || !isIdCollection(snapshot)) return false;
+  if (live.length !== snapshot.length) return false;
+  const snapshotById = new Map(snapshot.map((value) => [value.id, value]));
+  return live.every((value) => {
+    const other = snapshotById.get(value.id);
+    return other !== undefined && equalDomainValue(project(value), project(other));
+  });
+}
+
+function validateCurrentTaskRevisionCoherence(
+  issues: ValidationIssue[],
+  task: Task,
+  revision: TaskRevision,
+): void {
+  if (!equalDomainValue(task.definition, revision.snapshot.definition)) {
+    addIssue(issues, "current_revision_mismatch", "definition", "Current Task definition must match its current revision snapshot");
+  }
+  if (!sameIdCollection(
+    task.criteria,
+    revision.snapshot.criteria,
+    (value) => definitionWithoutMutableState(value as unknown as Record<string, unknown>),
+  )) addIssue(issues, "current_revision_mismatch", "criteria", "Current Task Criterion definitions must match its current revision snapshot");
+  if (!sameIdCollection(
+    task.deliverables,
+    revision.snapshot.deliverables,
+    (value) => definitionWithoutMutableState(value as unknown as Record<string, unknown>),
+  )) addIssue(issues, "current_revision_mismatch", "deliverables", "Current Task Deliverable definitions must match its current revision snapshot");
+  if (!sameIdCollection(task.dependencies, revision.snapshot.dependencies)) {
+    addIssue(issues, "current_revision_mismatch", "dependencies", "Current Task dependencies must match its current revision snapshot");
+  }
+  const liveStages = task.approvalPolicy?.stages;
+  const snapshotStages = revision.snapshot.approvalPolicy?.stages;
+  if (
+    (liveStages === undefined) !== (snapshotStages === undefined) ||
+    (liveStages !== undefined && snapshotStages !== undefined && !sameIdCollection(liveStages, snapshotStages))
+  ) {
+    addIssue(issues, "current_revision_mismatch", "approvalPolicy", "Current Task approval policy must match its current revision snapshot");
+  }
+  if (!equalDomainValue(task.timing, revision.snapshot.timing)) {
+    addIssue(issues, "current_revision_mismatch", "timing", "Current Task timing must match its current revision snapshot");
+  }
+}
+
+function validSequenceAnchor(
+  issues: ValidationIssue[],
+  value: number,
+  taskSequence: number,
+  path: string,
+): boolean {
+  const valid = Number.isSafeInteger(value) && value >= 2 && value <= taskSequence;
+  if (!valid) addIssue(issues, "invalid_sequence", path, "Task record sequence anchor must be an integer within the aggregate sequence");
+  return valid;
+}
+
+function timestamp(
+  issues: ValidationIssue[],
+  value: string,
+  path: string,
+): number | undefined {
+  const parsed = taskTimestampMilliseconds(value);
+  if (parsed === undefined) addIssue(issues, "invalid_timestamp", path, "Task lifecycle timestamp must be valid");
+  return parsed;
+}
+
+function notBefore(
+  issues: ValidationIssue[],
+  value: number | undefined,
+  boundary: number | undefined,
+  path: string,
+  message: string,
+): void {
+  if (value !== undefined && boundary !== undefined && value < boundary) addIssue(issues, "invalid_timestamp_order", path, message);
+}
+
 export function validateTaskProfile(profile: TaskProfile): readonly ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!nonEmpty(profile.ref.id)) addIssue(issues, "empty_id", "profile.ref.id", "Profile ID must be non-empty");
@@ -174,6 +286,17 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   if (!nonEmpty(task.profile.id) || !Number.isSafeInteger(task.profile.version) || task.profile.version < 1) {
     addIssue(issues, "invalid_profile_ref", "profile", "Task profile reference must contain a non-empty ID and positive version");
   }
+  const taskCreatedTime = timestamp(issues, task.createdAt, "createdAt");
+  const taskUpdatedTime = task.updatedAt === undefined ? undefined : timestamp(issues, task.updatedAt, "updatedAt");
+  notBefore(issues, taskUpdatedTime, taskCreatedTime, "updatedAt", "Task updatedAt must not precede createdAt");
+  const sequenceAnchors = new Map<number, string>();
+  const anchoredTimes: { readonly sequence: number; readonly time: number; readonly path: string }[] = [];
+  const validateAnchor = (value: number, path: string): void => {
+    if (!validSequenceAnchor(issues, value, task.sequence, path)) return;
+    const existing = sequenceAnchors.get(value);
+    if (existing !== undefined) addIssue(issues, "duplicate_sequence", path, `Task record sequence anchor is already used by ${existing}`);
+    else sequenceAnchors.set(value, path);
+  };
 
   // Scope validation
   if (!task.scope || !["project", "milestone", "breakdown", "task"].includes(task.scope.type)) {
@@ -211,6 +334,8 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   // Reminders validation
   validateUniqueIds(issues, task.reminders, "reminders");
   for (const reminder of task.reminders) {
+    const reminderCreatedTime = timestamp(issues, reminder.createdAt, `reminders.${reminder.id}.createdAt`);
+    notBefore(issues, reminderCreatedTime, taskCreatedTime, `reminders.${reminder.id}.createdAt`, "Reminder creation must not precede Task creation");
     if (!reminder.trigger || !["at", "before_due", "after_start"].includes(reminder.trigger.type)) {
       addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger`, "Reminder trigger is invalid");
     } else {
@@ -228,6 +353,20 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
 
   // Revisions validation
   const revisions = validateTaskRevisions(issues, task);
+  const revisionTimeFor = (id: string): number | undefined => {
+    const value = revisions.get(id as import("../../model/domain.js").TaskRevisionId)?.createdAt;
+    return value === undefined ? undefined : taskTimestampMilliseconds(value);
+  };
+  let previousRevisionTime: number | undefined;
+  for (const revision of task.revisions) {
+    const revisionTime = timestamp(issues, revision.createdAt, `revisions.${revision.id}.createdAt`);
+    notBefore(issues, revisionTime, taskCreatedTime, `revisions.${revision.id}.createdAt`, "Task revision creation must not precede Task creation");
+    notBefore(issues, revisionTime, previousRevisionTime, `revisions.${revision.id}.createdAt`, "Task revision timestamps must be nondecreasing");
+    if (revisionTime !== undefined) previousRevisionTime = revisionTime;
+    const startsAt = revision.snapshot.timing?.startsAt === undefined ? undefined : timestamp(issues, revision.snapshot.timing.startsAt, `revisions.${revision.id}.snapshot.timing.startsAt`);
+    const dueAt = revision.snapshot.timing?.dueAt === undefined ? undefined : timestamp(issues, revision.snapshot.timing.dueAt, `revisions.${revision.id}.snapshot.timing.dueAt`);
+    if (startsAt !== undefined && dueAt !== undefined && dueAt < startsAt) addIssue(issues, "invalid_timing_range", `revisions.${revision.id}.snapshot.timing`, "Revision timing dueAt must not precede startsAt");
+  }
   const currentRevision = revisions.get(task.currentRevisionId);
   if (currentRevision === undefined) {
     addIssue(issues, "missing_current_revision", "currentRevisionId", "Current revision does not exist");
@@ -241,6 +380,7 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     ) {
       addIssue(issues, "profile_snapshot_mismatch", "profile", "Current profile must match current revision snapshot");
     }
+    validateCurrentTaskRevisionCoherence(issues, task, currentRevision);
   }
 
   validateCriteria(issues, task.criteria, "criteria");
@@ -272,6 +412,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   // Reviews validation
   validateUniqueIds(issues, task.reviews, "reviews");
   for (const review of task.reviews) {
+    validateAnchor(review.createdSequence, `reviews.${review.id}.createdSequence`);
+    const reviewCreatedTime = timestamp(issues, review.createdAt, `reviews.${review.id}.createdAt`);
+    if (reviewCreatedTime !== undefined && Number.isSafeInteger(review.createdSequence)) anchoredTimes.push({ sequence: review.createdSequence, time: reviewCreatedTime, path: `reviews.${review.id}.createdAt` });
+    notBefore(issues, reviewCreatedTime, revisionTimeFor(review.taskRevisionId), `reviews.${review.id}.createdAt`, "Review creation must not precede its Task revision");
+    const reviewCompletedTime = review.completedAt === undefined ? undefined : timestamp(issues, review.completedAt, `reviews.${review.id}.completedAt`);
+    notBefore(issues, reviewCompletedTime, reviewCreatedTime, `reviews.${review.id}.completedAt`, "Review completion must not precede Review creation");
     if (!["requested", "in_progress", "completed", "cancelled"].includes(review.state)) {
       addIssue(issues, "invalid_state", `reviews.${review.id}.state`, "Review state is invalid");
     }
@@ -297,6 +443,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   validateUniqueIds(issues, task.challenges, "challenges");
   const evidenceIds = new Set<string>();
   for (const challenge of task.challenges) {
+    validateAnchor(challenge.createdSequence, `challenges.${challenge.id}.createdSequence`);
+    const challengeCreatedTime = timestamp(issues, challenge.createdAt, `challenges.${challenge.id}.createdAt`);
+    if (challengeCreatedTime !== undefined && Number.isSafeInteger(challenge.createdSequence)) anchoredTimes.push({ sequence: challenge.createdSequence, time: challengeCreatedTime, path: `challenges.${challenge.id}.createdAt` });
+    notBefore(issues, challengeCreatedTime, revisionTimeFor(challenge.taskRevisionId), `challenges.${challenge.id}.createdAt`, "Challenge creation must not precede its Task revision");
+    const resolvedTime = challenge.resolution === undefined ? undefined : timestamp(issues, challenge.resolution.resolvedAt, `challenges.${challenge.id}.resolution.resolvedAt`);
+    notBefore(issues, resolvedTime, challengeCreatedTime, `challenges.${challenge.id}.resolution.resolvedAt`, "Challenge resolution must not precede Challenge creation");
     const target = challenge.target;
     if (!["open", "under_review", "resolved", "rejected", "withdrawn", "reopened"].includes(challenge.state)) {
       addIssue(issues, "invalid_state", `challenges.${challenge.id}.state`, "Challenge state is invalid");
@@ -322,6 +474,15 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     if (target.type === "evidence" && !nonEmpty(target.ref)) {
       addIssue(issues, "missing_challenge_target", `challenges.${challenge.id}.target.ref`, "Challenge evidence reference must be non-empty");
     }
+    for (const evidence of challenge.evidence) {
+      validateAnchor(evidence.createdSequence, `challenges.${challenge.id}.evidence.${evidence.id}.createdSequence`);
+      if (evidence.createdSequence <= challenge.createdSequence) addIssue(issues, "invalid_sequence_order", `challenges.${challenge.id}.evidence.${evidence.id}.createdSequence`, "Challenge evidence sequence must follow Challenge creation sequence");
+      const evidenceCreatedTime = timestamp(issues, evidence.createdAt, `challenges.${challenge.id}.evidence.${evidence.id}.createdAt`);
+      if (evidenceCreatedTime !== undefined && Number.isSafeInteger(evidence.createdSequence)) anchoredTimes.push({ sequence: evidence.createdSequence, time: evidenceCreatedTime, path: `challenges.${challenge.id}.evidence.${evidence.id}.createdAt` });
+      notBefore(issues, evidenceCreatedTime, challengeCreatedTime, `challenges.${challenge.id}.evidence.${evidence.id}.createdAt`, "Challenge evidence creation must not precede Challenge creation");
+      const withdrawnTime = evidence.withdrawnAt === undefined ? undefined : timestamp(issues, evidence.withdrawnAt, `challenges.${challenge.id}.evidence.${evidence.id}.withdrawnAt`);
+      notBefore(issues, withdrawnTime, evidenceCreatedTime, `challenges.${challenge.id}.evidence.${evidence.id}.withdrawnAt`, "Challenge evidence withdrawal must not precede Evidence creation");
+    }
     validateTaskChallengeEvidence(issues, task, challenge.id, challenge.taskRevisionId, challenge.evidence, evidenceIds);
   }
 
@@ -337,6 +498,8 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   validateUniqueIds(issues, task.approvalRecords, "approvalRecords");
   const approvals = new Map<ApprovalRecordId, TaskApprovalRecord>(task.approvalRecords.map((record) => [record.id, record]));
   for (const [index, record] of task.approvalRecords.entries()) {
+    const approvalCreatedTime = timestamp(issues, record.createdAt, `approvalRecords.${record.id}.createdAt`);
+    notBefore(issues, approvalCreatedTime, revisionTimeFor(record.taskRevisionId), `approvalRecords.${record.id}.createdAt`, "Approval record creation must not precede its Task revision");
     if (!["granted", "rejected", "revoked", "waived"].includes(record.type)) {
       addIssue(issues, "invalid_approval_record", `approvalRecords.${record.id}.type`, "Approval record type is invalid");
     }
@@ -370,6 +533,10 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   // Acceptance records validation
   validateUniqueIds(issues, task.acceptanceRecords, "acceptanceRecords");
   for (const acceptance of task.acceptanceRecords) {
+    validateAnchor(acceptance.acceptedSequence, `acceptanceRecords.${acceptance.id}.acceptedSequence`);
+    const acceptedTime = timestamp(issues, acceptance.acceptedAt, `acceptanceRecords.${acceptance.id}.acceptedAt`);
+    if (acceptedTime !== undefined && Number.isSafeInteger(acceptance.acceptedSequence)) anchoredTimes.push({ sequence: acceptance.acceptedSequence, time: acceptedTime, path: `acceptanceRecords.${acceptance.id}.acceptedAt` });
+    notBefore(issues, acceptedTime, revisionTimeFor(acceptance.taskRevisionId), `acceptanceRecords.${acceptance.id}.acceptedAt`, "Task acceptance must not precede its Task revision");
     if (acceptance.taskId !== task.id) {
       addIssue(issues, "acceptance_task_mismatch", `acceptanceRecords.${acceptance.id}.taskId`, "Acceptance belongs to another task");
     }
@@ -377,7 +544,7 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     if (revision === undefined) {
       addIssue(issues, "missing_acceptance_revision", `acceptanceRecords.${acceptance.id}.taskRevisionId`, "Acceptance revision does not exist");
     } else {
-      validateTaskExecutionSnapshot(issues, acceptance.snapshot, revision, task, acceptance.acceptedAt, `acceptanceRecords.${acceptance.id}.snapshot`);
+      validateTaskExecutionSnapshot(issues, acceptance.snapshot, revision, task, acceptance.acceptedAt, acceptance.acceptedSequence, `acceptanceRecords.${acceptance.id}.snapshot`);
     }
   }
   const currentAcceptance =
@@ -394,6 +561,10 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   // Completion records validation
   validateUniqueIds(issues, task.completionRecords, "completionRecords");
   for (const completion of task.completionRecords) {
+    validateAnchor(completion.completedSequence, `completionRecords.${completion.id}.completedSequence`);
+    const completedTime = timestamp(issues, completion.completedAt, `completionRecords.${completion.id}.completedAt`);
+    if (completedTime !== undefined && Number.isSafeInteger(completion.completedSequence)) anchoredTimes.push({ sequence: completion.completedSequence, time: completedTime, path: `completionRecords.${completion.id}.completedAt` });
+    notBefore(issues, completedTime, revisionTimeFor(completion.taskRevisionId), `completionRecords.${completion.id}.completedAt`, "Task completion must not precede its Task revision");
     if (completion.taskId !== task.id) {
       addIssue(issues, "completion_task_mismatch", `completionRecords.${completion.id}.taskId`, "Completion belongs to another task");
     }
@@ -412,10 +583,19 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
         addIssue(issues, "missing_completion_acceptance", `completionRecords.${completion.id}.acceptanceId`, "Completion acceptance does not exist");
       } else if (completion.taskRevisionId !== acceptance.taskRevisionId) {
         addIssue(issues, "completion_revision_mismatch", `completionRecords.${completion.id}.taskRevisionId`, "Completion revision must match acceptance revision");
+      } else {
+        notBefore(
+          issues,
+          completedTime,
+          taskTimestampMilliseconds(acceptance.acceptedAt),
+          `completionRecords.${completion.id}.completedAt`,
+          "Acceptance-backed completion must not precede its acceptance",
+        );
+        if (completion.completedSequence <= acceptance.acceptedSequence) addIssue(issues, "invalid_sequence_order", `completionRecords.${completion.id}.completedSequence`, "Acceptance-backed completion sequence must follow its acceptance sequence");
       }
     }
     if (completion.evaluationSnapshot !== undefined && revision !== undefined) {
-      validateTaskExecutionSnapshot(issues, completion.evaluationSnapshot, revision, task, completion.completedAt, `completionRecords.${completion.id}.evaluationSnapshot`);
+      validateTaskExecutionSnapshot(issues, completion.evaluationSnapshot, revision, task, completion.completedAt, completion.completedSequence, `completionRecords.${completion.id}.evaluationSnapshot`);
     }
     if (revision?.snapshot.evaluationPolicy.requiresAcceptance === true && completion.acceptanceId === undefined) {
       addIssue(issues, "missing_completion_acceptance", `completionRecords.${completion.id}.acceptanceId`, "Completion policy requires an acceptance proof");
@@ -433,6 +613,29 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
   }
   if (currentCompletion?.acceptanceId !== undefined && (currentAcceptance === undefined || currentCompletion.acceptanceId !== currentAcceptance.id)) {
     addIssue(issues, "completion_acceptance_mismatch", "currentCompletionId", "Acceptance-backed current completion must reference current acceptance");
+  }
+
+  const orderedAnchors = [...anchoredTimes].sort((left, right) => left.sequence - right.sequence);
+  for (let index = 1; index < orderedAnchors.length; index += 1) {
+    const previous = orderedAnchors[index - 1]!;
+    const current = orderedAnchors[index]!;
+    if (current.time < previous.time) addIssue(issues, "invalid_timestamp_order", current.path, "Task lifecycle timestamps must be nondecreasing with aggregate sequence");
+  }
+  if (taskUpdatedTime !== undefined) {
+    const lifecycleTimes = [
+      ...task.revisions.map((value) => value.createdAt),
+      ...task.reminders.map((value) => value.createdAt),
+      ...task.reviews.flatMap((value) => [value.createdAt, value.completedAt]),
+      ...task.challenges.flatMap((value) => [
+        value.createdAt,
+        value.resolution?.resolvedAt,
+        ...value.evidence.flatMap((evidence) => [evidence.createdAt, evidence.withdrawnAt]),
+      ]),
+      ...task.approvalRecords.map((value) => value.createdAt),
+      ...task.acceptanceRecords.map((value) => value.acceptedAt),
+      ...task.completionRecords.map((value) => value.completedAt),
+    ].flatMap((value) => value === undefined ? [] : [taskTimestampMilliseconds(value)]).filter((value): value is number => value !== undefined);
+    if (lifecycleTimes.some((value) => value > taskUpdatedTime)) addIssue(issues, "invalid_timestamp_order", "updatedAt", "Task updatedAt must not precede a recorded lifecycle event");
   }
 
   if (profile !== undefined) {

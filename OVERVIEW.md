@@ -647,6 +647,8 @@ Task Profile is what allows both lightweight and formal Tasks without inventing 
 
 Profile-owned ceremony is authoritative. Custom Task evaluation input MAY override requirement enforcement, waiver behavior, blocking-Challenge acceptance behavior, and the required Review result, but MUST NOT override whether the profile requires Reviews, Approvals, formal acceptance, or immediate completion after acceptance.
 
+An explicit Task Profile change MUST preserve those user-owned evaluation overrides while re-deriving every profile-owned ceremony field from the new Profile. It MUST NOT carry Review, Approval, acceptance, or automatic-completion ceremony values forward from the previous Profile.
+
 The stored `TaskEvaluationPolicySnapshot` is the complete resolved historical policy. Its `requiresAcceptance` and `closeImmediatelyOnAcceptance` values, and its profile-required Review/Approval gates, are derived from the Task Profile when the revision is created. It MUST NOT contain a second field expressing the same acceptance requirement under a different name.
 
 Profile versions are immutable.
@@ -1105,6 +1107,7 @@ interface TaskAcceptance {
   taskId: TaskId;
   taskRevisionId: TaskRevisionId;
   acceptedAt: string;
+  acceptedSequence: number;
   actor?: ActorRef;
   snapshot: TaskAcceptanceSnapshot;
 }
@@ -1150,6 +1153,7 @@ interface TaskCompletionBase {
   taskId: TaskId;
   taskRevisionId: TaskRevisionId;
   completedAt: string;
+  completedSequence: number;
   actor?: ActorRef;
   reason?: string;
 }
@@ -1187,6 +1191,8 @@ all child Milestones accepted/completed
 Evaluators SHOULD return explainable results listing missing criteria, missing deliverables, unsatisfied dependencies, blocking challenges, incomplete reviews, pending approvals, Artifact Requirement failures, Artifact verification failures, and structured reasons.
 
 Historical acceptance snapshots are the normative boundary for reconstructing formal acceptance-backed evaluation. A direct Task completion's `TaskExecutionEvaluationSnapshot` is the equivalent normative boundary when no acceptance record exists.
+
+Task Reviews, Challenges, and Challenge Evidence, together with acceptance and completion records, MUST carry immutable aggregate-sequence anchors. Historical evaluation coverage is determined by aggregate sequence rather than timestamp precision: every same-revision Review and Challenge created before the evaluation sequence, and every Evidence record created before that sequence for an included Challenge, MUST appear exactly once in the snapshot. Lifecycle timestamps remain mandatory and chronologically coherent, but equal timestamps do not establish ordering.
 
 ---
 
@@ -1580,6 +1586,8 @@ Task overview SHOULD cheaply answer high-value questions such as:
 
 Overview SHOULD NOT eagerly materialize all heavy child documents merely to answer summary queries.
 
+Task DOM Criterion and Deliverable satisfaction MUST use the same state, waiver-policy, and Artifact Requirement semantics as canonical Task evaluation. When a requirement needs Artifact context and none is supplied, satisfaction is not proven and MUST NOT be counted. Progress remains its separate state-based projection.
+
 ### 15.4 Task readiness and dependencies
 
 Task readiness is dependency-graph runnability and SHOULD align with canonical Milestone readiness. Blocking Challenges remain acceptance blockers and are exposed through Challenge, Overview, and Acceptance documents; they do not independently redefine graph readiness.
@@ -1594,6 +1602,8 @@ structured reasons
 ```
 
 Without graph context, readiness and blocked state are unknown. An unknown dependency MUST NOT be reported as unsatisfied or blocked. A completed Task is not runnable even when its dependencies are satisfied.
+
+When Task graph context is supplied to the DOM, it MUST be structurally valid and coherent with the current Task node, current revision gates, and exact current dependency definitions. Missing or stale graph state is invalid context, not a blocked dependency result.
 
 Task dependency documents SHOULD expose target type, target identity, gate, blocking status, current satisfaction, and structured failure reason without requiring raw Task JSON traversal.
 

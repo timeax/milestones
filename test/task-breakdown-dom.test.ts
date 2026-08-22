@@ -81,10 +81,7 @@ describe("Task & Breakdown DOM Read Models", () => {
     const task = TaskEditor.create(input, { clock, ids }).commit().task;
 
     const doc = new TaskDocumentBuilder(task, testTaskProfile)
-      .withGraph({
-        tasks: new Map(),
-        dependencies: [],
-      })
+      .withGraph(createTaskGraphSnapshot([task]))
       .withArtifacts({
         requirements: new Map(),
         artifacts: new Map(),
@@ -313,6 +310,19 @@ describe("Task & Breakdown DOM Read Models", () => {
     expect(blocked.isReady()).toBe(false);
     expect(blocked.isBlocked()).toBe(true);
     expect(blocked.getReasons().map((reason) => reason.code)).toEqual(["unsatisfied_dependency"]);
+    expect(() => createTaskDocument({
+      task: consumer,
+      profile: taskProfile,
+      graph: { tasks: new Map([[provider.id, blockedGraph.tasks.get(provider.id)!]]), dependencies: consumer.dependencies },
+    })).toThrow(/Invalid task dependency graph/);
+    expect(() => createTaskDocument({
+      task: consumer,
+      profile: taskProfile,
+      graph: { ...blockedGraph, dependencies: [] },
+    })).toThrow(/Graph dependencies are stale/);
+    const staleNodeGraph = createTaskGraphSnapshot([provider, consumer], consumer.dependencies);
+    (staleNodeGraph.tasks.get(consumer.id)!.gates.criteria as Map<any, any>).set("stale", { state: "verified" });
+    expect(() => createTaskDocument({ task: consumer, profile: taskProfile, graph: staleNodeGraph })).toThrow(/Graph node .* is stale/);
 
     const providerEditor = TaskEditor.open(provider, taskProfile, { clock, ids });
     providerEditor.complete();

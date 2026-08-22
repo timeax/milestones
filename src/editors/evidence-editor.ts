@@ -183,6 +183,7 @@ export class EvidenceEditor {
       ...(supersedesEvidenceId === undefined ? {} : { supersedesEvidenceId }),
       ...(actor === undefined ? {} : { createdBy: actor }),
       createdAt: this.session.clock.now(),
+      ...(isTask ? { createdSequence: this.session.draft.sequence + 1 } : {}),
     };
   }
 

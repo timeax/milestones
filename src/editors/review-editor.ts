@@ -41,6 +41,7 @@ export class ReviewEditor {
         state: "requested",
         sourceLinks: [],
         createdAt: this.session.clock.now(),
+        createdSequence: this.session.draft.sequence + 1,
       };
       this.session.draft.reviews.push(clone(review));
       this.session.changes.push({ type: "review_changed", reviewId: id });

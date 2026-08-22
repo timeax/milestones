@@ -210,6 +210,8 @@ export interface TaskChallengeEvidence {
   readonly supersedesEvidenceId?: ChallengeEvidenceId;
   readonly createdBy?: ActorRef;
   readonly createdAt: string;
+  /** Aggregate event sequence at which this evidence was created. */
+  readonly createdSequence: number;
   readonly withdrawnBy?: ActorRef;
   readonly withdrawnAt?: string;
   readonly withdrawalReason?: string;
@@ -225,6 +227,8 @@ export interface TaskChallenge {
   readonly state: ChallengeState;
   readonly raisedBy?: ActorRef;
   readonly createdAt: string;
+  /** Aggregate event sequence at which this challenge was created. */
+  readonly createdSequence: number;
   readonly resolution?: TaskChallengeResolution;
   readonly evidence: readonly TaskChallengeEvidence[];
   readonly sourceLinks?: readonly TaskSourceLink[];
@@ -245,6 +249,8 @@ export interface TaskReview {
   readonly artifactVersionIds?: readonly ArtifactVersionId[];
   readonly sourceLinks?: readonly TaskSourceLink[];
   readonly sourceSnapshot?: readonly TaskSourceSnapshot[];
+  /** Aggregate event sequence at which this review was requested. */
+  readonly createdSequence: number;
 }
 
 export interface TaskApprovalPolicy {
@@ -446,6 +452,8 @@ export interface TaskAcceptance {
   readonly taskId: TaskId;
   readonly taskRevisionId: TaskRevisionId;
   readonly acceptedAt: string;
+  /** Aggregate event sequence at which this acceptance was recorded. */
+  readonly acceptedSequence: number;
   readonly actor?: ActorRef;
   readonly snapshot: TaskAcceptanceSnapshot;
 }
@@ -455,6 +463,8 @@ export interface TaskCompletionBase {
   readonly taskId: TaskId;
   readonly taskRevisionId: TaskRevisionId;
   readonly completedAt: string;
+  /** Aggregate event sequence at which this completion was recorded. */
+  readonly completedSequence: number;
   readonly actor?: ActorRef;
   readonly reason?: string;
 }

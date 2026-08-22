@@ -69,6 +69,7 @@ export class ChallengeEditor {
         sourceLinks: [],
         ...(raisedBy === undefined ? {} : { raisedBy }),
         createdAt: this.session.clock.now(),
+        createdSequence: this.session.draft.sequence + 1,
       };
       this.session.draft.challenges.push(challenge);
       this.session.changes.push({ type: "challenge_changed", challengeId: id });

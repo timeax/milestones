@@ -49,6 +49,7 @@
       "taskId": "task-direct-completed",
       "taskRevisionId": "task-direct-revision-1",
       "completedAt": "2026-08-22T01:00:00.000Z",
+      "completedSequence": 2,
       "evaluationSnapshot": {
         "revisionId": "task-direct-revision-1",
         "criteria": [],

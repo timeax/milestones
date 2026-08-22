@@ -78,15 +78,15 @@
   "challenges": [{
     "id": "challenge-formal", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2",
     "target": { "type": "criterion", "criterionId": "criterion-formal" }, "reason": "Confirm the implementation proof",
-    "severity": "blocking", "state": "resolved", "raisedBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T01:00:00.000Z",
+    "severity": "blocking", "state": "resolved", "raisedBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T01:00:00.000Z", "createdSequence": 20,
     "resolution": { "outcome": "no_effect", "summary": "Proof confirmed", "resolvedBy": { "id": "reviewer", "type": "user" }, "resolvedAt": "2026-08-21T02:00:00.000Z" },
-    "evidence": [{ "id": "challenge-evidence-formal", "taskId": "task-formal-full", "challengeId": "challenge-formal", "taskRevisionId": "task-revision-2", "kind": "supporting", "title": "Verification log", "description": "The verification passed", "state": "active", "createdBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T01:30:00.000Z" }],
+    "evidence": [{ "id": "challenge-evidence-formal", "taskId": "task-formal-full", "challengeId": "challenge-formal", "taskRevisionId": "task-revision-2", "kind": "supporting", "title": "Verification log", "description": "The verification passed", "state": "active", "createdBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T01:30:00.000Z", "createdSequence": 21 }],
     "sourceLinks": [{ "schemaVersion": "1.1", "id": "source-challenge-reference", "artifactId": "artifact-challenge", "subject": { "type": "challenge", "id": "challenge-formal" }, "role": "reference", "createdBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T01:00:00.000Z" }]
   }],
   "reviews": [{
     "id": "review-formal", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2",
     "requestedBy": { "id": "planner", "type": "user" }, "assignedReviewer": { "id": "reviewer", "type": "user" }, "completedBy": { "id": "reviewer", "type": "user" },
-    "state": "completed", "result": "accepted", "summary": "Ready to release", "createdAt": "2026-08-21T03:00:00.000Z", "completedAt": "2026-08-21T04:00:00.000Z",
+    "state": "completed", "result": "accepted", "summary": "Ready to release", "createdAt": "2026-08-21T03:00:00.000Z", "createdSequence": 22, "completedAt": "2026-08-21T04:00:00.000Z",
     "artifactVersionIds": ["artifact-reference-v1"],
     "sourceLinks": [{ "schemaVersion": "1.1", "id": "source-review-decision", "artifactId": "artifact-review-decision", "artifactVersionId": "artifact-review-decision-v1", "subject": { "type": "review", "id": "review-formal" }, "role": "decision", "createdBy": { "id": "reviewer", "type": "user" }, "createdAt": "2026-08-21T04:00:00.000Z" }],
     "sourceSnapshot": [{ "linkId": "source-review-decision", "artifactId": "artifact-review-decision", "artifactVersionId": "artifact-review-decision-v1", "subject": { "type": "review", "id": "review-formal" }, "role": "decision" }]
@@ -99,7 +99,7 @@
   ],
   "acceptanceRecords": [
     {
-      "id": "acceptance-r1", "taskId": "task-formal-full", "taskRevisionId": "task-revision-1", "acceptedAt": "2026-08-20T03:00:00.000Z",
+      "id": "acceptance-r1", "taskId": "task-formal-full", "taskRevisionId": "task-revision-1", "acceptedAt": "2026-08-20T03:00:00.000Z", "acceptedSequence": 10,
       "snapshot": {
         "revisionId": "task-revision-1",
         "criteria": [{ "id": "criterion-formal", "state": "verified", "satisfied": true }],
@@ -115,7 +115,7 @@
     },
     {
       "id": "acceptance-r2", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2",
-      "actor": { "id": "acceptor", "type": "user" }, "acceptedAt": "2026-08-21T06:00:00.000Z",
+      "actor": { "id": "acceptor", "type": "user" }, "acceptedAt": "2026-08-21T06:00:00.000Z", "acceptedSequence": 30,
       "snapshot": {
         "revisionId": "task-revision-2",
         "criteria": [{ "id": "criterion-formal", "state": "verified", "satisfied": true }],
@@ -141,9 +141,9 @@
   ],
   "currentAcceptanceId": "acceptance-r2",
   "completionRecords": [
-    { "id": "completion-r1", "taskId": "task-formal-full", "taskRevisionId": "task-revision-1", "acceptanceId": "acceptance-r1", "completedAt": "2026-08-20T04:00:00.000Z" },
-    { "id": "completion-r2-first", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2", "acceptanceId": "acceptance-r2", "completedAt": "2026-08-21T07:00:00.000Z" },
-    { "id": "completion-r2-current", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2", "acceptanceId": "acceptance-r2", "actor": { "id": "closer", "type": "user" }, "reason": "Re-completed after administrative reopen", "completedAt": "2026-08-21T08:00:00.000Z" }
+    { "id": "completion-r1", "taskId": "task-formal-full", "taskRevisionId": "task-revision-1", "acceptanceId": "acceptance-r1", "completedAt": "2026-08-20T04:00:00.000Z", "completedSequence": 11 },
+    { "id": "completion-r2-first", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2", "acceptanceId": "acceptance-r2", "completedAt": "2026-08-21T07:00:00.000Z", "completedSequence": 31 },
+    { "id": "completion-r2-current", "taskId": "task-formal-full", "taskRevisionId": "task-revision-2", "acceptanceId": "acceptance-r2", "actor": { "id": "closer", "type": "user" }, "reason": "Re-completed after administrative reopen", "completedAt": "2026-08-21T08:00:00.000Z", "completedSequence": 33 }
   ],
   "currentCompletionId": "completion-r2-current",
   "timing": { "startsAt": "2026-08-21T09:00:00+01:00", "dueAt": "2026-08-23T08:30:00Z", "timeZone": "Africa/Lagos" },

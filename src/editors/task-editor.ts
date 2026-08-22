@@ -19,10 +19,10 @@ import type {
 import { invariant } from "../model/errors.js";
 import {
   calculateTaskProgress,
-  defaultTaskEvaluationPolicy,
   deriveTaskState,
   evaluateTaskAcceptance,
   evaluateTaskCompletion,
+  resolveTaskEvaluationPolicy,
 } from "../services/task-evaluation.js";
 import { assertValidTask, assertValidTaskProfile } from "../services/validation.js";
 import type { TaskEditorOptions } from "./editor-contracts.js";
@@ -125,10 +125,7 @@ export class TaskEditor {
       sourceLinks: [],
       snapshot: {
         profile: clone(input.profile.ref),
-        evaluationPolicy: {
-          ...defaultTaskEvaluationPolicy(input.profile),
-          ...input.evaluationPolicy,
-        },
+        evaluationPolicy: resolveTaskEvaluationPolicy(input.profile, input.evaluationPolicy),
         definition: clone(input.definition),
         criteria: criteria.map(({ state: _state, ...c }) => c),
         deliverables: deliverables.map(({ state: _state, ...d }) => d),
@@ -352,6 +349,7 @@ export class TaskEditor {
       taskRevisionId: this.session.draft.currentRevisionId,
       ...(actor === undefined ? {} : { actor }),
       acceptedAt: this.session.clock.now(),
+      acceptedSequence: this.session.draft.sequence + 1,
       snapshot: evaluation.snapshot,
     };
     this.session.draft.acceptanceRecords.push(acceptance);
@@ -389,6 +387,7 @@ export class TaskEditor {
       ...(actor === undefined ? {} : { actor }),
       ...(reason === undefined ? {} : { reason }),
       completedAt: this.session.clock.now(),
+      completedSequence: this.session.draft.sequence + 1,
     };
     let completion: TaskCompletion;
     if (this.session.draft.currentAcceptanceId === undefined) {

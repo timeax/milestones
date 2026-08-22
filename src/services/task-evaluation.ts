@@ -1,5 +1,6 @@
 import type {
   ApprovalStage,
+  ArtifactEvaluationResult,
   ArtifactEvaluationSnapshot,
   DerivedTaskState,
   EvaluationReason,
@@ -8,6 +9,9 @@ import type {
   TaskAcceptanceEvaluation,
   TaskArtifactContext,
   TaskCompletionEvaluation,
+  TaskCriterion,
+  TaskDeliverableRequirement,
+  TaskEvaluationPolicyOverrides,
   TaskEvaluationPolicySnapshot,
   TaskProfile,
   TaskApprovalAcceptanceSnapshot,
@@ -36,6 +40,26 @@ export function defaultTaskEvaluationPolicy(profile: TaskProfile): TaskEvaluatio
     requiresAcceptance: profile.completion.requiresAcceptance,
     closeImmediatelyOnAcceptance: profile.completion.closeImmediatelyOnAcceptance,
   };
+}
+
+export function taskEvaluationPolicyOverrides(
+  policy: TaskEvaluationPolicySnapshot,
+): Required<TaskEvaluationPolicyOverrides> {
+  return {
+    requiredCriteriaMustBeVerified: policy.requiredCriteriaMustBeVerified,
+    requiredDeliverablesMustBeSatisfied: policy.requiredDeliverablesMustBeSatisfied,
+    waivedCriteriaSatisfyRequired: policy.waivedCriteriaSatisfyRequired,
+    waivedDeliverablesSatisfyRequired: policy.waivedDeliverablesSatisfyRequired,
+    blockingChallengesPreventAcceptance: policy.blockingChallengesPreventAcceptance,
+    requiredReviewResult: policy.requiredReviewResult,
+  };
+}
+
+export function resolveTaskEvaluationPolicy(
+  profile: TaskProfile,
+  overrides?: TaskEvaluationPolicyOverrides,
+): TaskEvaluationPolicySnapshot {
+  return { ...defaultTaskEvaluationPolicy(profile), ...overrides };
 }
 
 export function currentTaskPolicy(task: Task): TaskEvaluationPolicySnapshot {
@@ -78,6 +102,36 @@ export function evaluateTaskApprovalStage(task: Task, stage: ApprovalStage): Tas
   };
 }
 
+export function evaluateTaskCriterionSatisfaction(
+  criterion: TaskCriterion,
+  policy: TaskEvaluationPolicySnapshot,
+  artifacts?: TaskArtifactContext,
+): { readonly satisfied: boolean; readonly artifacts: ArtifactEvaluationResult } {
+  const stateSatisfied =
+    criterion.state === "verified" ||
+    (criterion.state === "waived" && policy.waivedCriteriaSatisfyRequired);
+  const artifactResult = evaluateArtifacts(
+    { type: "criterion", id: criterion.id, requirementIds: criterion.artifactRequirementIds ?? [] },
+    artifacts,
+  );
+  return { satisfied: stateSatisfied && artifactResult.satisfied, artifacts: artifactResult };
+}
+
+export function evaluateTaskDeliverableSatisfaction(
+  deliverable: TaskDeliverableRequirement,
+  policy: TaskEvaluationPolicySnapshot,
+  artifacts?: TaskArtifactContext,
+): { readonly satisfied: boolean; readonly artifacts: ArtifactEvaluationResult } {
+  const stateSatisfied =
+    deliverable.state === "satisfied" ||
+    (deliverable.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
+  const artifactResult = evaluateArtifacts(
+    { type: "deliverable_requirement", id: deliverable.id, requirementIds: deliverable.artifactRequirementIds ?? [] },
+    artifacts,
+  );
+  return { satisfied: stateSatisfied && artifactResult.satisfied, artifacts: artifactResult };
+}
+
 export function evaluateTaskAcceptance(
   task: Task,
   profile: TaskProfile,
@@ -88,18 +142,13 @@ export function evaluateTaskAcceptance(
   const reasons: EvaluationReason[] = [];
   const artifactSnapshots: ArtifactEvaluationSnapshot[] = [];
   const criteria = task.criteria.map((criterion) => {
-    const stateSatisfied =
-      criterion.state === "verified" ||
-      (criterion.state === "waived" && policy.waivedCriteriaSatisfyRequired);
-    const artifactResult = evaluateArtifacts(
-      { type: "criterion", id: criterion.id, requirementIds: criterion.artifactRequirementIds ?? [] },
-      artifacts,
-    );
+    const result = evaluateTaskCriterionSatisfaction(criterion, policy, artifacts);
+    const artifactResult = result.artifacts;
     artifactSnapshots.push(...artifactResult.snapshots);
     if (criterion.required && policy.requiredCriteriaMustBeVerified) {
       reasons.push(...artifactResult.reasons);
     }
-    const satisfied = stateSatisfied && artifactResult.satisfied;
+    const satisfied = result.satisfied;
     if (criterion.required && policy.requiredCriteriaMustBeVerified && !satisfied) {
       reasons.push({
         code: "missing_criterion",
@@ -111,18 +160,13 @@ export function evaluateTaskAcceptance(
   });
 
   const deliverables = task.deliverables.map((deliverable) => {
-    const stateSatisfied =
-      deliverable.state === "satisfied" ||
-      (deliverable.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
-    const artifactResult = evaluateArtifacts(
-      { type: "deliverable_requirement", id: deliverable.id, requirementIds: deliverable.artifactRequirementIds ?? [] },
-      artifacts,
-    );
+    const result = evaluateTaskDeliverableSatisfaction(deliverable, policy, artifacts);
+    const artifactResult = result.artifacts;
     artifactSnapshots.push(...artifactResult.snapshots);
     if (deliverable.required && policy.requiredDeliverablesMustBeSatisfied) {
       reasons.push(...artifactResult.reasons);
     }
-    const satisfied = stateSatisfied && artifactResult.satisfied;
+    const satisfied = result.satisfied;
     if (deliverable.required && policy.requiredDeliverablesMustBeSatisfied && !satisfied) {
       reasons.push({
         code: "missing_deliverable",

@@ -7,7 +7,7 @@ import type {
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
 import { defaultEvaluationPolicy } from "../services/evaluation.js";
-import { defaultTaskEvaluationPolicy } from "../services/task-evaluation.js";
+import { currentTaskPolicy, resolveTaskEvaluationPolicy, taskEvaluationPolicyOverrides } from "../services/task-evaluation.js";
 import { validateProfile } from "../services/validation.js";
 import { validateTaskProfile } from "../services/validation/task.js";
 import { emit, emitTask } from "./internal/events.js";
@@ -46,7 +46,10 @@ export class RevisionEditor {
         this.session,
         reason,
         actor,
-        defaultTaskEvaluationPolicy(profile as TaskProfile),
+        resolveTaskEvaluationPolicy(
+          profile as TaskProfile,
+          taskEvaluationPolicyOverrides(currentTaskPolicy(this.session.draft)),
+        ),
       );
       this.session.profile = clone(profile as TaskProfile);
       (this.session as TaskEditorSession).draft.profile = clone(profile.ref as import("../model/domain.js").TaskProfileRef);
