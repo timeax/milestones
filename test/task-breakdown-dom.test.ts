@@ -9,6 +9,7 @@ import {
   TaskDocumentBuilder,
   TaskEditor,
   createBreakdownDocument,
+  createTaskGraphSnapshot,
   createTaskDocument,
   type CreateBreakdownInput,
   type CreateTaskInput,
@@ -200,7 +201,6 @@ describe("Task & Breakdown DOM Read Models", () => {
     expect(readiness.canEvaluate()).toBe(true);
     expect(readiness.isBlocked()).toBe(false);
     expect(readiness.getBlockingDependencyCount()).toBe(0);
-    expect(readiness.getBlockingChallengeCount()).toBe(0);
     expect(readiness.getUnknownDependencyCount()).toBe(0);
     expect(readiness.getReasons()).toEqual([]);
     expect(readiness.getDependencies().getCount()).toBe(0);
@@ -277,6 +277,63 @@ describe("Task & Breakdown DOM Read Models", () => {
     expect(docTask.getScope().getTaskId()).toBe("task-parent");
   });
 
+  it("aligns Task readiness with dependency graph runnability", () => {
+    const clock = new FixedTaskClock("2026-08-20T12:00:00.000Z");
+    const ids = new SequenceTaskIdGenerator();
+    const taskProfile: TaskProfile = {
+      ...testTaskProfile,
+      reviews: { enabled: true, required: false },
+      approvals: { enabled: true, required: false },
+      completion: { enabled: true, requiresAcceptance: false, closeImmediatelyOnAcceptance: false },
+    };
+    const provider = TaskEditor.create(
+      { profile: taskProfile, scope: { type: "project", projectId: "readiness" }, definition: { title: "Provider" } },
+      { clock, ids },
+    ).commit().task;
+    const consumerEditor = TaskEditor.create(
+      {
+        profile: taskProfile,
+        scope: { type: "project", projectId: "readiness" },
+        definition: { title: "Consumer" },
+        dependencies: [{ dependsOn: { type: "task", id: provider.id }, gate: { type: "completed" }, blocking: true }],
+      },
+      { clock, ids },
+    );
+    consumerEditor.challenges.raise({ type: "task" }, "Acceptance concern", "blocking");
+    const consumer = consumerEditor.commit().task;
+
+    const unknown = createTaskDocument({ task: consumer, profile: taskProfile }).getReadiness();
+    expect(unknown.canEvaluate()).toBe(false);
+    expect(unknown.isReady()).toBeUndefined();
+    expect(unknown.isBlocked()).toBeUndefined();
+    expect(unknown.getReasons()).toEqual([]);
+
+    const blockedGraph = createTaskGraphSnapshot([provider, consumer], consumer.dependencies);
+    const blocked = createTaskDocument({ task: consumer, profile: taskProfile, graph: blockedGraph }).getReadiness();
+    expect(blocked.isReady()).toBe(false);
+    expect(blocked.isBlocked()).toBe(true);
+    expect(blocked.getReasons().map((reason) => reason.code)).toEqual(["unsatisfied_dependency"]);
+
+    const providerEditor = TaskEditor.open(provider, taskProfile, { clock, ids });
+    providerEditor.complete();
+    const completedProvider = providerEditor.commit().task;
+    const readyGraph = createTaskGraphSnapshot([completedProvider, consumer], consumer.dependencies);
+    const ready = createTaskDocument({ task: consumer, profile: taskProfile, graph: readyGraph }).getReadiness();
+    expect(ready.isReady()).toBe(true);
+    expect(ready.isBlocked()).toBe(false);
+    expect(ready.getReasons()).toEqual([]);
+    expect(createTaskDocument({ task: consumer, profile: taskProfile, graph: readyGraph }).getChallenges().getBlocking()).toHaveLength(1);
+
+    const completedEditor = TaskEditor.create(
+      { profile: taskProfile, scope: { type: "project", projectId: "readiness" }, definition: { title: "Completed" } },
+      { clock, ids },
+    );
+    completedEditor.complete();
+    const completed = completedEditor.commit().task;
+    const completedGraph = createTaskGraphSnapshot([completed], []);
+    expect(createTaskDocument({ task: completed, profile: taskProfile, graph: completedGraph }).getReadiness().isReady()).toBe(false);
+  });
+
   it("constructs and queries a BreakdownDocument resolving child MilestoneDocuments", () => {
     const clock = new FixedBreakdownClock("2026-08-20T12:00:00.000Z");
 
@@ -338,7 +395,8 @@ describe("Task & Breakdown DOM Read Models", () => {
     expect(doc.getProgress().getCompletedCount()).toBe(0);
     expect(doc.getProgress().getAcceptedCount()).toBe(0);
     expect(doc.getProgress().getPercentage()).toBe(0);
-    expect(doc.getReadiness().isReady()).toBe(true);
+    expect(doc.getReadiness().hasRunnableWork()).toBe(true);
+    expect(doc.getReadiness().isFullyEvaluated()).toBe(true);
     expect(doc.getReadiness().getIncompleteCount()).toBe(1);
     expect(doc.getReadiness().getBlockedCount()).toBe(0);
     expect(doc.getReadiness().getReadyCount()).toBe(1);
@@ -413,14 +471,19 @@ describe("Task & Breakdown DOM Read Models", () => {
       graphResolver: () => graph,
     });
     const readiness = document.getReadiness();
-    expect(readiness.isReady()).toBe(true);
+    expect(readiness.hasRunnableWork()).toBe(true);
+    expect(readiness.isFullyEvaluated()).toBe(true);
+    /* eslint-disable @typescript-eslint/no-deprecated -- explicit compatibility-alias coverage */
+    expect(readiness.isReady()).toBe(readiness.hasRunnableWork());
+    expect(readiness.canEvaluate()).toBe(readiness.isFullyEvaluated());
+    /* eslint-enable @typescript-eslint/no-deprecated */
     expect(readiness.getReadyMilestoneIds()).toEqual([upstream.id]);
     expect(readiness.getBlockedMilestoneIds()).toEqual([blocked.id]);
     expect(readiness.getUnknownMilestoneIds()).toEqual([]);
 
     const unknown = createBreakdownDocument({ breakdown, profileResolver: () => testMilestoneProfile }).getReadiness();
-    expect(unknown.canEvaluate()).toBe(false);
-    expect(unknown.isReady()).toBeUndefined();
+    expect(unknown.isFullyEvaluated()).toBe(false);
+    expect(unknown.hasRunnableWork()).toBeUndefined();
     expect(unknown.getUnknownCount()).toBe(2);
 
     const completionEditor = new MilestoneEditor(upstream, testMilestoneProfile, { clock, ids });
@@ -429,8 +492,8 @@ describe("Task & Breakdown DOM Read Models", () => {
     const completed = completionEditor.commit().milestone;
     const completeBreakdown = { ...breakdown, milestones: [completed] };
     const completeReadiness = createBreakdownDocument({ breakdown: completeBreakdown }).getReadiness();
-    expect(completeReadiness.canEvaluate()).toBe(true);
-    expect(completeReadiness.isReady()).toBe(false);
+    expect(completeReadiness.isFullyEvaluated()).toBe(true);
+    expect(completeReadiness.hasRunnableWork()).toBe(false);
     expect(completeReadiness.getIncompleteCount()).toBe(0);
   });
 });

@@ -46,8 +46,10 @@ describe("Task Domain & TaskEditor", () => {
       createTestHarness(),
     ).task.revisions[0]!.snapshot.evaluationPolicy;
 
-    expect(formal).toMatchObject({ requiresAcceptance: true, completionRequiresCurrentAcceptance: true });
-    expect(simple).toMatchObject({ requiresAcceptance: false, completionRequiresCurrentAcceptance: false });
+    expect(formal).toMatchObject({ requiresAcceptance: true });
+    expect(simple).toMatchObject({ requiresAcceptance: false });
+    expect(formal).not.toHaveProperty("completionRequiresCurrentAcceptance");
+    expect(simple).not.toHaveProperty("completionRequiresCurrentAcceptance");
   });
 
   it("emits creation semantics and enforces lifecycle conflicts until reopen", () => {

@@ -24,7 +24,6 @@
           "requireReviewWhenProfileRequires": false,
           "requireApprovalsWhenProfileRequires": false,
           "requiresAcceptance": false,
-          "completionRequiresCurrentAcceptance": false,
           "closeImmediatelyOnAcceptance": false
         },
         "definition": { "title": "Direct completed Task" },

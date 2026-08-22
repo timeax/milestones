@@ -11,14 +11,30 @@ import {
   SequenceTaskIdGenerator,
   TaskEditor,
   createTaskDocument,
+  defaultTaskEvaluationPolicy,
   evaluateTaskAcceptance,
   validateTask,
+  type AcceptanceId,
   type Task,
   type TaskArtifactContext,
   type TaskArtifactLink,
-  type TaskEvaluationPolicySnapshot,
+  type TaskCompletion,
+  type TaskEvaluationPolicyOverrides,
+  type TaskExecutionEvaluationSnapshot,
   type TaskProfile,
 } from "../src/index.js";
+
+const completionTypeBase = { id: "completion-type" as never, taskId: "task-type" as never, taskRevisionId: "revision-type" as never, completedAt: "2026-08-22T00:00:00.000Z" };
+const completionTypeSnapshot = {} as TaskExecutionEvaluationSnapshot;
+const acceptanceBackedCompletion: TaskCompletion = { ...completionTypeBase, acceptanceId: "acceptance-type" as AcceptanceId };
+const directCompletion: TaskCompletion = { ...completionTypeBase, evaluationSnapshot: completionTypeSnapshot };
+// @ts-expect-error Task completion requires one proof branch.
+const completionWithoutProof: TaskCompletion = completionTypeBase;
+// @ts-expect-error Task completion forbids conflicting proof branches.
+const completionWithBothProofs: TaskCompletion = { ...completionTypeBase, acceptanceId: "acceptance-type" as AcceptanceId, evaluationSnapshot: completionTypeSnapshot };
+// @ts-expect-error Profile-owned ceremony is not a public evaluation override.
+const invalidCeremonyOverride = { waivedCriteriaSatisfyRequired: false, requiresAcceptance: false } satisfies TaskEvaluationPolicyOverrides;
+void [acceptanceBackedCompletion, directCompletion, completionWithoutProof, completionWithBothProofs, invalidCeremonyOverride];
 
 const clock = new FixedTaskClock("2026-08-22T00:00:00.000Z");
 
@@ -151,19 +167,11 @@ describe("Task/Breakdown 1.0 correctness pass", () => {
 
   it("preserves custom evaluation policy across ordinary material revisions and replaces it on profile change", () => {
     const taskProfile = profile(false);
-    const custom: TaskEvaluationPolicySnapshot = {
-      requiredCriteriaMustBeVerified: true,
-      requiredDeliverablesMustBeSatisfied: true,
+    const custom: TaskEvaluationPolicyOverrides = {
       waivedCriteriaSatisfyRequired: false,
       waivedDeliverablesSatisfyRequired: false,
-      blockingChallengesPreventAcceptance: true,
-      requiredReviewResult: "accepted",
-      requireReviewWhenProfileRequires: false,
-      requireApprovalsWhenProfileRequires: false,
-      requiresAcceptance: false,
-      completionRequiresCurrentAcceptance: false,
-      closeImmediatelyOnAcceptance: false,
     };
+    const expected = { ...defaultTaskEvaluationPolicy(taskProfile), ...custom };
     const ids = new SequenceTaskIdGenerator();
     let task = TaskEditor.create(
       {
@@ -176,7 +184,7 @@ describe("Task/Breakdown 1.0 correctness pass", () => {
       },
       { clock, ids },
     ).commit().task;
-    const assertPolicy = () => expect(task.revisions.at(-1)!.snapshot.evaluationPolicy).toEqual(custom);
+    const assertPolicy = () => expect(task.revisions.at(-1)!.snapshot.evaluationPolicy).toEqual(expected);
 
     let editor = TaskEditor.open(task, taskProfile, { clock, ids });
     editor.definition.update({ ...task.definition, title: "Policy 2" });
@@ -321,6 +329,124 @@ describe("Task/Breakdown 1.0 correctness pass", () => {
     expect(validateTask(mismatchedRevocation, taskProfile).map((issue) => issue.code)).toContain("revocation_target_mismatch");
   });
 
+  it("validates Artifact-aware satisfaction without rejecting valid optional failures", () => {
+    const taskProfile = profile(true);
+    const editor = TaskEditor.create(
+      {
+        profile: taskProfile,
+        scope: { type: "project", projectId: "artifact-snapshot" },
+        definition: { title: "Artifact snapshot" },
+        criteria: [{ title: "Optional criterion", required: false, state: "not_started", artifactRequirementIds: ["requirement-source-boundary"] }],
+        deliverables: [{ title: "Optional deliverable", required: false, state: "missing", artifactRequirementIds: ["requirement-source-boundary"] }],
+      },
+      { clock, ids: new SequenceTaskIdGenerator(), artifacts: artifactContext() },
+    );
+    const criterionId = editor.task.criteria[0]!.id;
+    const deliverableId = editor.task.deliverables[0]!.id;
+    editor.criteria.start(criterionId);
+    editor.criteria.submit(criterionId);
+    editor.criteria.verify(criterionId);
+    editor.deliverables.submit(deliverableId);
+    editor.deliverables.satisfy(deliverableId);
+    editor.accept();
+    const task = editor.commit().task;
+    expect(task.acceptanceRecords[0]!.snapshot.criteria[0]).toMatchObject({ state: "verified", satisfied: false });
+    expect(task.acceptanceRecords[0]!.snapshot.deliverables[0]).toMatchObject({ state: "satisfied", satisfied: false });
+    expect(validateTask(task, taskProfile)).toEqual([]);
+
+    const impossible = structuredClone(task) as Task;
+    (impossible.acceptanceRecords[0]!.snapshot.criteria[0] as { state: string; satisfied: boolean }).state = "failed";
+    (impossible.acceptanceRecords[0]!.snapshot.criteria[0] as { state: string; satisfied: boolean }).satisfied = true;
+    expect(validateTask(impossible, taskProfile).map((issue) => issue.code)).toContain("incoherent_acceptance_snapshot");
+
+    const noArtifactDefinition = structuredClone(task) as Task;
+    (noArtifactDefinition.revisions[0]!.snapshot.criteria[0] as { artifactRequirementIds?: readonly string[] }).artifactRequirementIds = [];
+    expect(validateTask(noArtifactDefinition, taskProfile).map((issue) => issue.code)).toContain("incoherent_acceptance_snapshot");
+  });
+
+  it("requires exact revision-defined snapshot coverage", () => {
+    const taskProfile = profile(true);
+    const editor = TaskEditor.create(
+      {
+        profile: taskProfile,
+        scope: { type: "project", projectId: "snapshot-coverage" },
+        definition: { title: "Snapshot coverage" },
+        criteria: [{ title: "Optional criterion", required: false, state: "not_started" }],
+        deliverables: [{ title: "Optional deliverable", required: false, state: "missing" }],
+        dependencies: [{ dependsOn: { type: "task", id: "upstream" as never }, gate: { type: "completed" }, blocking: false }],
+        approvalPolicy: { stages: [{ label: "Optional approval", required: false, requiredApprovalCount: 0, scope: "milestone" }] },
+      },
+      { clock, ids: new SequenceTaskIdGenerator() },
+    );
+    editor.accept();
+    const task = editor.commit().task;
+    for (const collection of ["criteria", "deliverables", "dependencies", "approvals"] as const) {
+      const malformed = structuredClone(task) as Task;
+      (malformed.acceptanceRecords[0]!.snapshot[collection] as unknown[]).splice(0, 1);
+      expect(validateTask(malformed, taskProfile).map((issue) => issue.code), collection).toContain("incomplete_acceptance_snapshot");
+    }
+  });
+
+  it("keeps old Review and Challenge snapshots valid as current records progress", () => {
+    const taskProfile = profile(true);
+    const ids = new SequenceTaskIdGenerator();
+    let editor = TaskEditor.create(
+      { profile: taskProfile, scope: { type: "project", projectId: "historical-dynamic" }, definition: { title: "Historical dynamic records" } },
+      { clock, ids },
+    );
+    const reviewId = editor.reviews.request();
+    editor.reviews.start(reviewId);
+    editor.accept();
+    let task = editor.commit().task;
+
+    editor = TaskEditor.open(task, taskProfile, { clock: new FixedTaskClock("2026-08-23T00:00:00.000Z"), ids });
+    editor.reviews.complete(reviewId, "accepted");
+    const laterReviewId = editor.reviews.request();
+    const challengeId = editor.challenges.raise({ type: "task" }, "Later context", "non_blocking");
+    editor.evidence.add(challengeId, { kind: "supporting", title: "Later evidence", description: "Created after acceptance" });
+    task = editor.commit().task;
+    expect(validateTask(task, taskProfile)).toEqual([]);
+    expect(task.acceptanceRecords[0]!.snapshot.reviews[0]).toMatchObject({ id: reviewId, state: "in_progress", satisfied: false });
+    expect(task.reviews.find((review) => review.id === reviewId)).toMatchObject({ state: "completed", result: "accepted" });
+    expect(task.acceptanceRecords[0]!.snapshot.reviews.some((review) => review.id === laterReviewId)).toBe(false);
+
+    const futureSnapshot = evaluateTaskAcceptance(task, taskProfile).snapshot;
+    const malformedReview = structuredClone(task) as Task;
+    (malformedReview.acceptanceRecords[0]!.snapshot.reviews as typeof futureSnapshot.reviews[number][]).push(futureSnapshot.reviews.find((review) => review.id === laterReviewId)!);
+    expect(validateTask(malformedReview, taskProfile).map((issue) => issue.code)).toContain("incoherent_acceptance_snapshot");
+
+    const malformedChallenge = structuredClone(task) as Task;
+    (malformedChallenge.acceptanceRecords[0]!.snapshot.challenges as typeof futureSnapshot.challenges[number][]).push(futureSnapshot.challenges[0]!);
+    expect(validateTask(malformedChallenge, taskProfile).map((issue) => issue.code)).toContain("incoherent_acceptance_snapshot");
+  });
+
+  it("keeps profile-owned ceremony authoritative", () => {
+    const formalProfile: TaskProfile = {
+      ...profile(true),
+      reviews: { enabled: true, required: true },
+      approvals: { enabled: true, required: true },
+      completion: { enabled: true, requiresAcceptance: true, closeImmediatelyOnAcceptance: true },
+    };
+    const editor = TaskEditor.create(
+      { profile: formalProfile, evaluationPolicy: { waivedCriteriaSatisfyRequired: false }, scope: { type: "project", projectId: "profile-authority" }, definition: { title: "Profile authority" } },
+      { clock, ids: new SequenceTaskIdGenerator() },
+    );
+    expect(editor.task.revisions[0]!.snapshot.evaluationPolicy).toMatchObject({
+      requireReviewWhenProfileRequires: true,
+      requireApprovalsWhenProfileRequires: true,
+      requiresAcceptance: true,
+      closeImmediatelyOnAcceptance: true,
+      waivedCriteriaSatisfyRequired: false,
+    });
+
+    const { task } = emptyFormalTask();
+    const malformed = structuredClone(task) as Task;
+    const acceptance = malformed.acceptanceRecords[0]!;
+    (malformed.completionRecords[0] as unknown as { acceptanceId?: string; evaluationSnapshot?: TaskExecutionEvaluationSnapshot }).evaluationSnapshot = structuredClone(acceptance.snapshot);
+    delete (malformed.completionRecords[0] as unknown as { acceptanceId?: string }).acceptanceId;
+    expect(validateTask(malformed, profile(true)).map((issue) => issue.code)).toContain("missing_completion_acceptance");
+  });
+
   it("uses chronological timestamp comparison and one reminder-duration grammar everywhere", () => {
     const taskProfile = profile(false);
     const editor = TaskEditor.create(
@@ -348,11 +474,7 @@ describe("Task/Breakdown 1.0 correctness pass", () => {
 
   it("keeps Task Overview and approval reads compositional and policy-aware", () => {
     const taskProfile = profile(false);
-    const custom: TaskEvaluationPolicySnapshot = {
-      ...TaskEditor.create(
-        { profile: taskProfile, scope: { type: "project", projectId: "policy-template" }, definition: { title: "Template" } },
-        { clock, ids: new SequenceTaskIdGenerator() },
-      ).task.revisions[0]!.snapshot.evaluationPolicy,
+    const custom: TaskEvaluationPolicyOverrides = {
       waivedCriteriaSatisfyRequired: false,
       waivedDeliverablesSatisfyRequired: false,
     };
@@ -375,6 +497,8 @@ describe("Task/Breakdown 1.0 correctness pass", () => {
     expect(document.getOverview().getSatisfiedRequiredCriterionCount()).toBe(0);
     expect(document.getOverview().getSatisfiedRequiredDeliverableCount()).toBe(0);
     expect(document.getOverview().getProgressPercentage()).toBe(0);
+    expect(document.getCriteria().getUnsatisfied()).toHaveLength(1);
+    expect(document.getDeliverables().getUnsatisfied()).toHaveLength(1);
     expect(document.getApprovals().getPendingStages()).toHaveLength(1);
     expect(document.getAcceptance().getEvaluation().reasons.some((reason) => reason.code === "artifact_requirement_missing")).toBe(true);
   });

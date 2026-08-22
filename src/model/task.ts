@@ -311,8 +311,16 @@ export interface TaskEvaluationPolicySnapshot {
   readonly requireReviewWhenProfileRequires: boolean;
   readonly requireApprovalsWhenProfileRequires: boolean;
   readonly requiresAcceptance: boolean;
-  readonly completionRequiresCurrentAcceptance: boolean;
   readonly closeImmediatelyOnAcceptance: boolean;
+}
+
+export interface TaskEvaluationPolicyOverrides {
+  readonly requiredCriteriaMustBeVerified?: boolean;
+  readonly requiredDeliverablesMustBeSatisfied?: boolean;
+  readonly waivedCriteriaSatisfyRequired?: boolean;
+  readonly waivedDeliverablesSatisfyRequired?: boolean;
+  readonly blockingChallengesPreventAcceptance?: boolean;
+  readonly requiredReviewResult?: "accepted";
 }
 
 export type TaskCriterionDefinitionSnapshot = Omit<TaskCriterion, "state">;
@@ -442,16 +450,24 @@ export interface TaskAcceptance {
   readonly snapshot: TaskAcceptanceSnapshot;
 }
 
-export interface TaskCompletion {
+export interface TaskCompletionBase {
   readonly id: CompletionId;
   readonly taskId: TaskId;
   readonly taskRevisionId: TaskRevisionId;
-  readonly acceptanceId?: AcceptanceId;
-  readonly evaluationSnapshot?: TaskExecutionEvaluationSnapshot;
   readonly completedAt: string;
   readonly actor?: ActorRef;
   readonly reason?: string;
 }
+
+export type TaskCompletion =
+  | (TaskCompletionBase & {
+      readonly acceptanceId: AcceptanceId;
+      readonly evaluationSnapshot?: never;
+    })
+  | (TaskCompletionBase & {
+      readonly acceptanceId?: never;
+      readonly evaluationSnapshot: TaskExecutionEvaluationSnapshot;
+    });
 
 export interface Task {
   readonly id: TaskId;
@@ -658,7 +674,7 @@ export interface CreateTaskInput {
   readonly profile: TaskProfile;
   readonly definition: TaskDefinition;
   readonly revisionReason?: string;
-  readonly evaluationPolicy?: TaskEvaluationPolicySnapshot;
+  readonly evaluationPolicy?: TaskEvaluationPolicyOverrides;
   readonly criteria?: readonly Omit<TaskCriterion, "id">[];
   readonly deliverables?: readonly Omit<TaskDeliverableRequirement, "id">[];
   readonly dependencies?: readonly CreateTaskDependencyInput[];

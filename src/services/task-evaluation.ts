@@ -34,7 +34,6 @@ export function defaultTaskEvaluationPolicy(profile: TaskProfile): TaskEvaluatio
     requireReviewWhenProfileRequires: profile.reviews.required,
     requireApprovalsWhenProfileRequires: profile.approvals.required,
     requiresAcceptance: profile.completion.requiresAcceptance,
-    completionRequiresCurrentAcceptance: profile.completion.requiresAcceptance,
     closeImmediatelyOnAcceptance: profile.completion.closeImmediatelyOnAcceptance,
   };
 }
@@ -244,7 +243,7 @@ export function evaluateTaskCompletion(
     });
   }
 
-  if (policy.completionRequiresCurrentAcceptance) {
+  if (policy.requiresAcceptance) {
     const currentAcceptance =
       task.currentAcceptanceId === undefined
         ? undefined

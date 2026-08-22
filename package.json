@@ -1,7 +1,7 @@
 {
   "name": "@timeax/milestones",
   "version": "0.1.0",
-  "description": "Storage-neutral milestone lifecycle and evaluation domain engine.",
+  "description": "Storage-neutral structured-execution lifecycle, evaluation, and Breakdown planning domain engine.",
   "type": "module",
   "sideEffects": false,
   "engines": {

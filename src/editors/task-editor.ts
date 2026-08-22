@@ -125,7 +125,10 @@ export class TaskEditor {
       sourceLinks: [],
       snapshot: {
         profile: clone(input.profile.ref),
-        evaluationPolicy: input.evaluationPolicy ?? defaultTaskEvaluationPolicy(input.profile),
+        evaluationPolicy: {
+          ...defaultTaskEvaluationPolicy(input.profile),
+          ...input.evaluationPolicy,
+        },
         definition: clone(input.definition),
         criteria: criteria.map(({ state: _state, ...c }) => c),
         deliverables: deliverables.map(({ state: _state, ...d }) => d),
@@ -379,18 +382,31 @@ export class TaskEditor {
       { reasons: evaluation.reasons },
     );
     const id = this.session.ids.completion();
-    const completion: TaskCompletion = {
+    const base = {
       id,
       taskId: this.session.draft.id,
       taskRevisionId: this.session.draft.currentRevisionId,
-      ...(this.session.draft.currentAcceptanceId === undefined ? {} : { acceptanceId: this.session.draft.currentAcceptanceId }),
-      ...(this.session.draft.currentAcceptanceId !== undefined || evaluation.evaluationSnapshot === undefined
-        ? {}
-        : { evaluationSnapshot: clone(evaluation.evaluationSnapshot) }),
       ...(actor === undefined ? {} : { actor }),
       ...(reason === undefined ? {} : { reason }),
       completedAt: this.session.clock.now(),
     };
+    let completion: TaskCompletion;
+    if (this.session.draft.currentAcceptanceId === undefined) {
+      invariant(
+        evaluation.evaluationSnapshot !== undefined,
+        "INVALID_ARGUMENT",
+        "Direct Task completion requires an evaluation snapshot",
+      );
+      completion = {
+        ...base,
+        evaluationSnapshot: clone(evaluation.evaluationSnapshot),
+      };
+    } else {
+      completion = {
+        ...base,
+        acceptanceId: this.session.draft.currentAcceptanceId,
+      };
+    }
     this.session.draft.completionRecords.push(completion);
     this.session.draft.currentCompletionId = id;
     this.session.changes.push({ type: "completed", completionId: id });

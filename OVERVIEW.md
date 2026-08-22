@@ -645,6 +645,10 @@ interface TaskProfile {
 
 Task Profile is what allows both lightweight and formal Tasks without inventing separate Task aggregate classes.
 
+Profile-owned ceremony is authoritative. Custom Task evaluation input MAY override requirement enforcement, waiver behavior, blocking-Challenge acceptance behavior, and the required Review result, but MUST NOT override whether the profile requires Reviews, Approvals, formal acceptance, or immediate completion after acceptance.
+
+The stored `TaskEvaluationPolicySnapshot` is the complete resolved historical policy. Its `requiresAcceptance` and `closeImmediatelyOnAcceptance` values, and its profile-required Review/Approval gates, are derived from the Task Profile when the revision is created. It MUST NOT contain a second field expressing the same acceptance requirement under a different name.
+
 Profile versions are immutable.
 
 Every Milestone or Task revision records its exact profile reference and snapshots all evaluation- and completion-relevant behavior.
@@ -1141,16 +1145,24 @@ A Milestone MUST NOT acquire a second current completion without reopening/inval
 Task completion is Task-native:
 
 ```ts
-interface TaskCompletion {
+interface TaskCompletionBase {
   id: CompletionId;
   taskId: TaskId;
   taskRevisionId: TaskRevisionId;
-  acceptanceId?: AcceptanceId;
-  evaluationSnapshot?: TaskExecutionEvaluationSnapshot;
   completedAt: string;
   actor?: ActorRef;
   reason?: string;
 }
+
+type TaskCompletion =
+  | (TaskCompletionBase & {
+      acceptanceId: AcceptanceId;
+      evaluationSnapshot?: never;
+    })
+  | (TaskCompletionBase & {
+      acceptanceId?: never;
+      evaluationSnapshot: TaskExecutionEvaluationSnapshot;
+    });
 ```
 
 If the Task profile requires acceptance, a valid completion MUST reference current acceptance for the same Task revision.
@@ -1570,17 +1582,18 @@ Overview SHOULD NOT eagerly materialize all heavy child documents merely to answ
 
 ### 15.4 Task readiness and dependencies
 
-Task readiness SHOULD be derived from canonical dependency/challenge/evaluation services.
+Task readiness is dependency-graph runnability and SHOULD align with canonical Milestone readiness. Blocking Challenges remain acceptance blockers and are exposed through Challenge, Overview, and Acceptance documents; they do not independently redefine graph readiness.
 
 A Task readiness document SHOULD be able to explain:
 
 ```text
-ready / blocked
+ready / blocked / unknown
 blocking dependency count
-blocking challenge count
 unknown dependency count
 structured reasons
 ```
+
+Without graph context, readiness and blocked state are unknown. An unknown dependency MUST NOT be reported as unsatisfied or blocked. A completed Task is not runnable even when its dependencies are satisfied.
 
 Task dependency documents SHOULD expose target type, target identity, gate, blocking status, current satisfaction, and structured failure reason without requiring raw Task JSON traversal.
 
@@ -1641,6 +1654,8 @@ Child Milestone Documents require their correct Milestone profile and MAY requir
 Missing required child-document context SHOULD use the package's canonical typed domain-error mechanism rather than an arbitrary plain error where consistent with package conventions.
 
 Breakdown progress/readiness are derived plan projections. They MUST NOT become independent mutable truth or mutate the parent Milestone lifecycle.
+
+`BreakdownReadinessDocument.hasRunnableWork()` is the canonical work-availability query and returns `undefined` only when no child is known runnable and at least one incomplete child is unknown. `isFullyEvaluated()` reports whether every incomplete child was classifiable. Compatibility aliases `isReady()` and `canEvaluate()` MAY remain but SHOULD delegate to those canonical methods.
 
 ---
 

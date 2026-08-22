@@ -19,7 +19,7 @@
           "waivedCriteriaSatisfyRequired": true, "waivedDeliverablesSatisfyRequired": true,
           "blockingChallengesPreventAcceptance": true, "requiredReviewResult": "accepted",
           "requireReviewWhenProfileRequires": true, "requireApprovalsWhenProfileRequires": true,
-          "requiresAcceptance": true, "completionRequiresCurrentAcceptance": true,
+          "requiresAcceptance": true,
           "closeImmediatelyOnAcceptance": false
         },
         "definition": { "title": "Formal Task v1", "description": "Initial definition" },
@@ -46,7 +46,7 @@
           "waivedCriteriaSatisfyRequired": true, "waivedDeliverablesSatisfyRequired": true,
           "blockingChallengesPreventAcceptance": true, "requiredReviewResult": "accepted",
           "requireReviewWhenProfileRequires": true, "requireApprovalsWhenProfileRequires": true,
-          "requiresAcceptance": true, "completionRequiresCurrentAcceptance": true,
+          "requiresAcceptance": true,
           "closeImmediatelyOnAcceptance": false
         },
         "definition": { "title": "Formal Task v2", "description": "Clarified definition", "metadata": { "priority": "high" } },

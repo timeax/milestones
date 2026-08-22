@@ -48,33 +48,42 @@ function validateTaskExecutionSnapshot(
   snapshot: TaskExecutionEvaluationSnapshot,
   revision: TaskRevision,
   task: Task,
+  evaluatedAt: string,
   path: string,
 ): void {
   if (snapshot.revisionId !== revision.id) {
     addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.revisionId`, "Task evaluation snapshot revision must match its record");
   }
-  const checks: readonly [string, readonly string[], ReadonlySet<string>][] = [
-    ["criteria", snapshot.criteria.map((value) => value.id), new Set(revision.snapshot.criteria.map((value) => value.id))],
-    ["deliverables", snapshot.deliverables.map((value) => value.id), new Set(revision.snapshot.deliverables.map((value) => value.id))],
-    ["dependencies", snapshot.dependencies.map((value) => value.id), new Set(revision.snapshot.dependencies.map((value) => value.id))],
-    ["challenges", snapshot.challenges.map((value) => value.id), new Set(task.challenges.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id))],
-    ["reviews", snapshot.reviews.map((value) => value.id), new Set(task.reviews.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id))],
-    ["approvals", snapshot.approvals.map((value) => value.stageId), new Set(revision.snapshot.approvalPolicy?.stages.map((value) => value.id) ?? [])],
+  const checks: readonly [string, readonly string[], ReadonlySet<string>, boolean][] = [
+    ["criteria", snapshot.criteria.map((value) => value.id), new Set(revision.snapshot.criteria.map((value) => value.id)), true],
+    ["deliverables", snapshot.deliverables.map((value) => value.id), new Set(revision.snapshot.deliverables.map((value) => value.id)), true],
+    ["dependencies", snapshot.dependencies.map((value) => value.id), new Set(revision.snapshot.dependencies.map((value) => value.id)), true],
+    ["challenges", snapshot.challenges.map((value) => value.id), new Set(task.challenges.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id)), false],
+    ["reviews", snapshot.reviews.map((value) => value.id), new Set(task.reviews.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id)), false],
+    ["approvals", snapshot.approvals.map((value) => value.stageId), new Set(revision.snapshot.approvalPolicy?.stages.map((value) => value.id) ?? []), true],
   ];
-  for (const [name, ids, validIds] of checks) {
+  for (const [name, ids, validIds, exact] of checks) {
     if (duplicates(ids).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.${name}`, `Task evaluation ${name} IDs must be unique`);
     for (const id of ids) if (!validIds.has(id)) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.${name}`, `Task evaluation snapshot references missing ${name} target ${id}`);
+    if (exact) {
+      const actualIds = new Set(ids);
+      for (const id of validIds) if (!actualIds.has(id)) addIssue(issues, "incomplete_acceptance_snapshot", `${path}.${name}`, `Task evaluation snapshot is missing ${name} target ${id}`);
+    }
   }
   const policy = revision.snapshot.evaluationPolicy;
   for (const value of snapshot.criteria) {
     if (!["not_started", "in_progress", "submitted", "verified", "failed", "waived"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.criteria.${value.id}.state`, "Criterion snapshot state is invalid");
-    const expected = value.state === "verified" || (value.state === "waived" && policy.waivedCriteriaSatisfyRequired);
-    if (value.satisfied !== expected) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.criteria.${value.id}`, "Criterion satisfaction does not match state and revision policy");
+    const stateSatisfied = value.state === "verified" || (value.state === "waived" && policy.waivedCriteriaSatisfyRequired);
+    const definition = revision.snapshot.criteria.find((item) => item.id === value.id);
+    const hasArtifactRequirements = (definition?.artifactRequirementIds?.length ?? 0) > 0;
+    if ((!hasArtifactRequirements && value.satisfied !== stateSatisfied) || (value.satisfied && !stateSatisfied)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.criteria.${value.id}`, "Criterion satisfaction does not match its state, revision policy, and Artifact requirements");
   }
   for (const value of snapshot.deliverables) {
     if (!["missing", "submitted", "satisfied", "rejected", "waived"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.deliverables.${value.id}.state`, "Deliverable snapshot state is invalid");
-    const expected = value.state === "satisfied" || (value.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
-    if (value.satisfied !== expected) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.deliverables.${value.id}`, "Deliverable satisfaction does not match state and revision policy");
+    const stateSatisfied = value.state === "satisfied" || (value.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
+    const definition = revision.snapshot.deliverables.find((item) => item.id === value.id);
+    const hasArtifactRequirements = (definition?.artifactRequirementIds?.length ?? 0) > 0;
+    if ((!hasArtifactRequirements && value.satisfied !== stateSatisfied) || (value.satisfied && !stateSatisfied)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.deliverables.${value.id}`, "Deliverable satisfaction does not match its state, revision policy, and Artifact requirements");
   }
   for (const value of snapshot.dependencies) {
     const definition = revision.snapshot.dependencies.find((item) => item.id === value.id);
@@ -83,13 +92,31 @@ function validateTaskExecutionSnapshot(
   for (const value of snapshot.reviews) {
     if (value.taskRevisionId !== revision.id) addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.reviews.${value.id}.taskRevisionId`, "Review snapshot must target the evaluated Task revision");
     const review = task.reviews.find((item) => item.id === value.id && item.taskRevisionId === revision.id);
-    if (review !== undefined && (value.state !== review.state || value.result !== review.result)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.reviews.${value.id}`, "Review snapshot does not match its Task review record");
+    if (review !== undefined && definitelyAfter(review.createdAt, evaluatedAt)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.reviews.${value.id}`, "Review did not exist when the Task evaluation was recorded");
+    const completed = value.state === "completed";
+    if (!["requested", "in_progress", "completed", "cancelled"].includes(value.state) || completed !== (value.result !== undefined)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.reviews.${value.id}`, "Review snapshot state and result are incoherent");
+    if (value.satisfied !== (completed && value.result === policy.requiredReviewResult)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.reviews.${value.id}.satisfied`, "Review satisfaction does not match its historical state and revision policy");
+    if (duplicates(value.artifactVersionIds).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.reviews.${value.id}.artifactVersionIds`, "Review Artifact version snapshot IDs must be unique");
   }
   for (const value of snapshot.challenges) {
     const challenge = task.challenges.find((item) => item.id === value.id && item.taskRevisionId === revision.id);
     if (challenge !== undefined && (value.severity !== challenge.severity || !sameChallengeTarget(value.target, challenge.target))) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}`, "Challenge snapshot does not match its Task challenge record");
+    if (challenge !== undefined && definitelyAfter(challenge.createdAt, evaluatedAt)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}`, "Challenge did not exist when the Task evaluation was recorded");
     if (!["open", "under_review", "resolved", "rejected", "withdrawn", "reopened"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.state`, "Challenge snapshot state is invalid");
+    if ((value.state === "resolved") !== (value.resolution !== undefined)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.resolution`, "Challenge resolution must match its historical state");
+    if (value.resolution !== undefined && definitelyAfter(value.resolution.resolvedAt, evaluatedAt)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.resolution.resolvedAt`, "Challenge was resolved after the Task evaluation was recorded");
+    const expectedBlocking = policy.blockingChallengesPreventAcceptance && value.severity === "blocking" && (value.state === "open" || value.state === "under_review" || value.state === "reopened");
+    if (value.blocking !== expectedBlocking) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.blocking`, "Challenge blocking state does not match its historical state and revision policy");
     if (duplicates(value.evidence.map((item) => item.id)).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.challenges.${value.id}.evidence`, "Challenge evidence snapshot IDs must be unique");
+    for (const evidence of value.evidence) {
+      const record = challenge?.evidence.find((item) => item.id === evidence.id);
+      if (record === undefined) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.challenges.${value.id}.evidence`, `Task evaluation snapshot references missing Challenge evidence ${evidence.id}`);
+      else {
+        if (record.kind !== evidence.kind || record.title !== evidence.title || record.description !== evidence.description || record.supersedesEvidenceId !== evidence.supersedesEvidenceId) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.evidence.${evidence.id}`, "Challenge evidence snapshot does not match its immutable definition");
+        if (definitelyAfter(record.createdAt, evaluatedAt)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.evidence.${evidence.id}`, "Challenge evidence did not exist when the Task evaluation was recorded");
+      }
+      if (!["active", "superseded", "withdrawn"].includes(evidence.state) || !["pending", "resolved", "invalid"].includes(evidence.sourceStatus)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.evidence.${evidence.id}`, "Challenge evidence snapshot state is invalid");
+    }
   }
   for (const value of snapshot.approvals) {
     if (value.taskRevisionId !== revision.id) addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.approvals.${value.stageId}.taskRevisionId`, "Approval snapshot must target the evaluated Task revision");
@@ -112,6 +139,12 @@ function validateTaskExecutionSnapshot(
     if (!nonEmpty(value.linkId) || !nonEmpty(value.artifactId) || !["reference", "context", "specification", "decision"].includes(value.role)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.sources.${value.linkId}`, "Source snapshot is invalid");
     if ((value.role === "specification" || value.role === "decision") && value.artifactVersionId === undefined) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.sources.${value.linkId}.artifactVersionId`, "Definition-bearing Source snapshot must be version-pinned");
   }
+}
+
+function definitelyAfter(value: string, boundary: string): boolean {
+  const valueTime = taskTimestampMilliseconds(value);
+  const boundaryTime = taskTimestampMilliseconds(boundary);
+  return valueTime !== undefined && boundaryTime !== undefined && valueTime > boundaryTime;
 }
 
 export function validateTaskProfile(profile: TaskProfile): readonly ValidationIssue[] {
@@ -344,7 +377,7 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     if (revision === undefined) {
       addIssue(issues, "missing_acceptance_revision", `acceptanceRecords.${acceptance.id}.taskRevisionId`, "Acceptance revision does not exist");
     } else {
-      validateTaskExecutionSnapshot(issues, acceptance.snapshot, revision, task, `acceptanceRecords.${acceptance.id}.snapshot`);
+      validateTaskExecutionSnapshot(issues, acceptance.snapshot, revision, task, acceptance.acceptedAt, `acceptanceRecords.${acceptance.id}.snapshot`);
     }
   }
   const currentAcceptance =
@@ -382,9 +415,9 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
       }
     }
     if (completion.evaluationSnapshot !== undefined && revision !== undefined) {
-      validateTaskExecutionSnapshot(issues, completion.evaluationSnapshot, revision, task, `completionRecords.${completion.id}.evaluationSnapshot`);
+      validateTaskExecutionSnapshot(issues, completion.evaluationSnapshot, revision, task, completion.completedAt, `completionRecords.${completion.id}.evaluationSnapshot`);
     }
-    if (revision?.snapshot.evaluationPolicy.completionRequiresCurrentAcceptance === true && completion.acceptanceId === undefined) {
+    if (revision?.snapshot.evaluationPolicy.requiresAcceptance === true && completion.acceptanceId === undefined) {
       addIssue(issues, "missing_completion_acceptance", `completionRecords.${completion.id}.acceptanceId`, "Completion policy requires an acceptance proof");
     }
   }
@@ -509,4 +542,12 @@ function validateTaskProfileState(issues: ValidationIssue[], task: Task, profile
   if (!profile.challenges.enabled && task.challenges.length > 0) addIssue(issues, "disabled_feature_has_state", "challenges", "Challenges are disabled by profile");
   if (!profile.reviews.enabled && task.reviews.length > 0) addIssue(issues, "disabled_feature_has_state", "reviews", "Reviews are disabled by profile");
   if (!profile.approvals.enabled && (stageCount > 0 || task.approvalRecords.length > 0)) addIssue(issues, "disabled_feature_has_state", "approvalPolicy", "Approvals are disabled by profile");
+  const currentRevision = task.revisions.find((revision) => revision.id === task.currentRevisionId);
+  const policy = currentRevision?.snapshot.evaluationPolicy;
+  if (policy !== undefined && (
+    policy.requireReviewWhenProfileRequires !== profile.reviews.required
+    || policy.requireApprovalsWhenProfileRequires !== profile.approvals.required
+    || policy.requiresAcceptance !== profile.completion.requiresAcceptance
+    || policy.closeImmediatelyOnAcceptance !== profile.completion.closeImmediatelyOnAcceptance
+  )) addIssue(issues, "profile_policy_mismatch", `revisions.${task.currentRevisionId}.snapshot.evaluationPolicy`, "Current Task revision ceremony policy must match its profile");
 }

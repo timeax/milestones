@@ -43,7 +43,11 @@ export interface BreakdownDefinitionDocument {
 }
 
 export interface BreakdownReadinessDocument {
+  hasRunnableWork(): boolean | undefined;
+  isFullyEvaluated(): boolean;
+  /** @deprecated Use isFullyEvaluated(). */
   canEvaluate(): boolean;
+  /** @deprecated Use hasRunnableWork(). */
   isReady(): boolean | undefined;
   getIncompleteCount(): number;
   getReadyCount(): number;
@@ -141,9 +145,13 @@ export class BreakdownDocument {
       else if (readiness === false) blocked.push(milestone.id);
       else unknown.push(milestone.id);
     }
+    const fullyEvaluated = unknown.length === 0;
+    const hasRunnableWork = ready.length > 0 ? true : unknown.length > 0 ? undefined : false;
     return {
-      canEvaluate: () => unknown.length === 0,
-      isReady: () => ready.length > 0 ? true : unknown.length > 0 ? undefined : false,
+      hasRunnableWork: () => hasRunnableWork,
+      isFullyEvaluated: () => fullyEvaluated,
+      canEvaluate: () => fullyEvaluated,
+      isReady: () => hasRunnableWork,
       getIncompleteCount: () => incomplete.length,
       getReadyCount: () => ready.length,
       getBlockedCount: () => blocked.length,
