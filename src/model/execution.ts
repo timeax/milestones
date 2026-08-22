@@ -100,7 +100,7 @@ export interface ApprovalStage {
   readonly authorityRef?: string;
 }
 
-export type ReopenEffect = "invalidate_completion" | "invalidate_completion_only" | "invalidate_acceptance_and_completion";
+export type ReopenEffect = "invalidate_completion" | "invalidate_acceptance_and_completion";
 
 export type EvaluationReasonCode =
   | "missing_criterion"

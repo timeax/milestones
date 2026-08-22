@@ -419,7 +419,7 @@ export interface TaskApprovalAcceptanceSnapshot {
   readonly actorIds: readonly string[];
 }
 
-export interface TaskAcceptanceSnapshot {
+export interface TaskExecutionEvaluationSnapshot {
   readonly revisionId: TaskRevisionId;
   readonly criteria: readonly import("./domain.js").CriterionAcceptanceSnapshot[];
   readonly deliverables: readonly import("./domain.js").DeliverableAcceptanceSnapshot[];
@@ -430,6 +430,8 @@ export interface TaskAcceptanceSnapshot {
   readonly artifacts: readonly import("./domain.js").ArtifactEvaluationSnapshot[];
   readonly sources?: readonly TaskSourceSnapshot[];
 }
+
+export type TaskAcceptanceSnapshot = TaskExecutionEvaluationSnapshot;
 
 export interface TaskAcceptance {
   readonly id: AcceptanceId;
@@ -445,6 +447,7 @@ export interface TaskCompletion {
   readonly taskId: TaskId;
   readonly taskRevisionId: TaskRevisionId;
   readonly acceptanceId?: AcceptanceId;
+  readonly evaluationSnapshot?: TaskExecutionEvaluationSnapshot;
   readonly completedAt: string;
   readonly actor?: ActorRef;
   readonly reason?: string;
@@ -487,6 +490,7 @@ export interface TaskAcceptanceEvaluation {
 export interface TaskCompletionEvaluation {
   readonly completable: boolean;
   readonly reasons: readonly EvaluationReason[];
+  readonly evaluationSnapshot?: TaskExecutionEvaluationSnapshot;
 }
 
 export type TaskChange =

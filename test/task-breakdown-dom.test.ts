@@ -13,6 +13,7 @@ import {
   type CreateBreakdownInput,
   type CreateTaskInput,
   type MilestoneProfile,
+  type MilestoneGraphSnapshot,
   type TaskProfile,
 } from "../src/index.js";
 
@@ -308,9 +309,23 @@ describe("Task & Breakdown DOM Read Models", () => {
     };
 
     const resolver = (_profileRef: any) => testMilestoneProfile;
+    const graph: MilestoneGraphSnapshot = {
+      milestones: new Map([[child.id, {
+        id: child.id,
+        revisionId: child.currentRevisionId,
+        gates: {
+          criteria: new Map(),
+          deliverables: new Map(),
+          accepted: false,
+          completed: false,
+        },
+      }]]),
+      dependencies: [],
+    };
 
     const doc = new BreakdownDocumentBuilder(breakdown)
       .withProfileResolver(resolver)
+      .withGraphResolver(() => graph)
       .build();
 
     expect(doc.getId()).toBe("bd-1");
@@ -326,6 +341,9 @@ describe("Task & Breakdown DOM Read Models", () => {
     expect(doc.getReadiness().isReady()).toBe(true);
     expect(doc.getReadiness().getIncompleteCount()).toBe(1);
     expect(doc.getReadiness().getBlockedCount()).toBe(0);
+    expect(doc.getReadiness().getReadyCount()).toBe(1);
+    expect(doc.getReadiness().getUnknownCount()).toBe(0);
+    expect(doc.getReadiness().getReadyMilestoneIds()).toEqual([child.id]);
 
     const childDocs = doc.getMilestones();
     expect(childDocs.length).toBe(1);
@@ -351,5 +369,68 @@ describe("Task & Breakdown DOM Read Models", () => {
     // Direct factory test
     const directDoc = createBreakdownDocument({ breakdown, profileResolver: resolver });
     expect(directDoc.getId()).toBe("bd-1");
+  });
+
+  it("derives Breakdown work availability from canonical child dependency readiness", () => {
+    const clock = new FixedBreakdownClock("2026-08-22T12:00:00.000Z");
+    const ids = new SequenceMilestoneIdGenerator();
+    const upstream = MilestoneEditor.create(
+      { profile: testMilestoneProfile, definition: { title: "Runnable upstream" } },
+      { clock, ids },
+    ).milestone;
+    const blockedBase = MilestoneEditor.create(
+      { profile: testMilestoneProfile, definition: { title: "Blocked downstream" } },
+      { clock, ids },
+    ).milestone;
+    const blockedEditor = new MilestoneEditor(blockedBase, testMilestoneProfile, { clock, ids });
+    blockedEditor.dependencies.add(upstream.id, { type: "completed" }, true);
+    const blocked = blockedEditor.commit().milestone;
+    const node = (milestone: typeof upstream) => ({
+      id: milestone.id,
+      revisionId: milestone.currentRevisionId,
+      gates: {
+        criteria: new Map(milestone.criteria.map((criterion) => [criterion.id, { state: criterion.state }])),
+        deliverables: new Map(milestone.deliverables.map((deliverable) => [deliverable.id, { state: deliverable.state }])),
+        accepted: milestone.currentAcceptanceId !== undefined,
+        completed: milestone.currentCompletionId !== undefined,
+      },
+    });
+    const graph: MilestoneGraphSnapshot = {
+      milestones: new Map([[upstream.id, node(upstream)], [blocked.id, node(blocked)]]),
+      dependencies: blocked.dependencies,
+    };
+    const breakdown = {
+      id: "breakdown-readiness" as any,
+      parentMilestoneId: "parent-readiness" as any,
+      definition: { title: "Readiness" },
+      milestones: [upstream, blocked],
+      sequence: 1,
+      createdAt: "2026-08-22T12:00:00.000Z",
+    };
+    const document = createBreakdownDocument({
+      breakdown,
+      profileResolver: () => testMilestoneProfile,
+      graphResolver: () => graph,
+    });
+    const readiness = document.getReadiness();
+    expect(readiness.isReady()).toBe(true);
+    expect(readiness.getReadyMilestoneIds()).toEqual([upstream.id]);
+    expect(readiness.getBlockedMilestoneIds()).toEqual([blocked.id]);
+    expect(readiness.getUnknownMilestoneIds()).toEqual([]);
+
+    const unknown = createBreakdownDocument({ breakdown, profileResolver: () => testMilestoneProfile }).getReadiness();
+    expect(unknown.canEvaluate()).toBe(false);
+    expect(unknown.isReady()).toBeUndefined();
+    expect(unknown.getUnknownCount()).toBe(2);
+
+    const completionEditor = new MilestoneEditor(upstream, testMilestoneProfile, { clock, ids });
+    completionEditor.accept();
+    completionEditor.complete();
+    const completed = completionEditor.commit().milestone;
+    const completeBreakdown = { ...breakdown, milestones: [completed] };
+    const completeReadiness = createBreakdownDocument({ breakdown: completeBreakdown }).getReadiness();
+    expect(completeReadiness.canEvaluate()).toBe(true);
+    expect(completeReadiness.isReady()).toBe(false);
+    expect(completeReadiness.getIncompleteCount()).toBe(0);
   });
 });

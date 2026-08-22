@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "1.0",
+  "id": "task-direct-completed",
+  "profile": { "id": "task-profile-direct", "version": 1 },
+  "scope": { "type": "project", "projectId": "project-direct" },
+  "currentRevisionId": "task-direct-revision-1",
+  "revisions": [
+    {
+      "id": "task-direct-revision-1",
+      "taskId": "task-direct-completed",
+      "number": 1,
+      "reason": "Initial task revision",
+      "createdAt": "2026-08-22T00:00:00.000Z",
+      "sourceLinks": [],
+      "snapshot": {
+        "profile": { "id": "task-profile-direct", "version": 1 },
+        "evaluationPolicy": {
+          "requiredCriteriaMustBeVerified": true,
+          "requiredDeliverablesMustBeSatisfied": true,
+          "waivedCriteriaSatisfyRequired": true,
+          "waivedDeliverablesSatisfyRequired": true,
+          "blockingChallengesPreventAcceptance": true,
+          "requiredReviewResult": "accepted",
+          "requireReviewWhenProfileRequires": false,
+          "requireApprovalsWhenProfileRequires": false,
+          "requiresAcceptance": false,
+          "completionRequiresCurrentAcceptance": false,
+          "closeImmediatelyOnAcceptance": false
+        },
+        "definition": { "title": "Direct completed Task" },
+        "criteria": [],
+        "deliverables": [],
+        "dependencies": [],
+        "sources": []
+      }
+    }
+  ],
+  "definition": { "title": "Direct completed Task" },
+  "sourceLinks": [],
+  "criteria": [],
+  "deliverables": [],
+  "dependencies": [],
+  "challenges": [],
+  "reviews": [],
+  "approvalRecords": [],
+  "acceptanceRecords": [],
+  "completionRecords": [
+    {
+      "id": "task-direct-completion-1",
+      "taskId": "task-direct-completed",
+      "taskRevisionId": "task-direct-revision-1",
+      "completedAt": "2026-08-22T01:00:00.000Z",
+      "evaluationSnapshot": {
+        "revisionId": "task-direct-revision-1",
+        "criteria": [],
+        "deliverables": [],
+        "dependencies": [],
+        "challenges": [],
+        "reviews": [],
+        "approvals": [],
+        "artifacts": [],
+        "sources": []
+      }
+    }
+  ],
+  "currentCompletionId": "task-direct-completion-1",
+  "reminders": [],
+  "sequence": 2,
+  "createdAt": "2026-08-22T00:00:00.000Z",
+  "updatedAt": "2026-08-22T01:00:00.000Z"
+}

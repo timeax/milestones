@@ -162,13 +162,16 @@ export function beginMaterialTaskRevision(
   session: TaskEditorSession,
   reason = "Material task change",
   actor?: ActorRef,
-  evaluationPolicy: TaskEvaluationPolicySnapshot = defaultTaskEvaluationPolicy(session.profile),
+  evaluationPolicy?: TaskEvaluationPolicySnapshot,
 ): TaskRevision["id"] {
   ensureOpen(session);
   feature(session.profile.revisions.enabled, "revisions");
   authorizeTask(session, "task.revise", actor, { type: "task" });
   if (session.revision !== undefined) return session.revision.id;
   const previousRevisionId = session.draft.currentRevisionId;
+  const previousRevision = session.draft.revisions.find((item) => item.id === previousRevisionId);
+  invariant(previousRevision !== undefined, "NOT_FOUND", `Current Task revision ${previousRevisionId} was not found`);
+  const effectiveEvaluationPolicy = evaluationPolicy ?? previousRevision.snapshot.evaluationPolicy;
   const revision: TaskRevision = {
     id: session.ids.revision(),
     taskId: session.draft.id,
@@ -178,7 +181,7 @@ export function beginMaterialTaskRevision(
     ...(actor === undefined ? {} : { actor }),
     createdAt: session.clock.now(),
     sourceLinks: [],
-    snapshot: { ...createTaskRevisionSnapshot(session), evaluationPolicy },
+    snapshot: { ...createTaskRevisionSnapshot(session), evaluationPolicy: clone(effectiveEvaluationPolicy) },
   };
   session.draft.revisions.push(revision);
   session.draft.currentRevisionId = revision.id;

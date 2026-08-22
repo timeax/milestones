@@ -384,6 +384,9 @@ export class TaskEditor {
       taskId: this.session.draft.id,
       taskRevisionId: this.session.draft.currentRevisionId,
       ...(this.session.draft.currentAcceptanceId === undefined ? {} : { acceptanceId: this.session.draft.currentAcceptanceId }),
+      ...(this.session.draft.currentAcceptanceId !== undefined || evaluation.evaluationSnapshot === undefined
+        ? {}
+        : { evaluationSnapshot: clone(evaluation.evaluationSnapshot) }),
       ...(actor === undefined ? {} : { actor }),
       ...(reason === undefined ? {} : { reason }),
       completedAt: this.session.clock.now(),

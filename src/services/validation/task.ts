@@ -3,12 +3,14 @@ import type {
   Task,
   TaskApprovalRecord,
   TaskChallengeEvidence,
+  TaskExecutionEvaluationSnapshot,
   TaskProfile,
   TaskRevision,
 } from "../../model/domain.js";
 import type { ValidationIssue } from "../../model/errors.js";
 import {
   addIssue,
+  duplicates,
   nonEmpty,
   validateApprovalStages,
   validateCriteria,
@@ -16,6 +18,101 @@ import {
   validateUniqueIds,
 } from "./common.js";
 import { assertValidSourceLink } from "../sources.js";
+import { taskDurationMilliseconds, taskTimestampMilliseconds } from "../task-time.js";
+
+function sameDependencyDefinition(
+  snapshot: TaskExecutionEvaluationSnapshot["dependencies"][number],
+  definition: TaskRevision["snapshot"]["dependencies"][number],
+): boolean {
+  if (snapshot.blocking !== definition.blocking || snapshot.dependsOn.type !== definition.dependsOn.type || snapshot.dependsOn.id !== definition.dependsOn.id || snapshot.gate.type !== definition.gate.type) return false;
+  if (snapshot.gate.type === "criterion" && definition.gate.type === "criterion") return snapshot.gate.criterionId === definition.gate.criterionId;
+  if (snapshot.gate.type === "deliverable" && definition.gate.type === "deliverable") return snapshot.gate.deliverableRequirementId === definition.gate.deliverableRequirementId;
+  return snapshot.gate.type === "accepted" || snapshot.gate.type === "completed";
+}
+
+function sameChallengeTarget(
+  left: TaskExecutionEvaluationSnapshot["challenges"][number]["target"],
+  right: Task["challenges"][number]["target"],
+): boolean {
+  if (left.type !== right.type) return false;
+  if (left.type === "criterion" && right.type === "criterion") return left.criterionId === right.criterionId;
+  if (left.type === "deliverable_requirement" && right.type === "deliverable_requirement") return left.deliverableRequirementId === right.deliverableRequirementId;
+  if (left.type === "review" && right.type === "review") return left.reviewId === right.reviewId;
+  if (left.type === "artifact" && right.type === "artifact") return left.artifactId === right.artifactId && left.artifactVersionId === right.artifactVersionId;
+  if (left.type === "evidence" && right.type === "evidence") return left.ref === right.ref;
+  return left.type === "task" && right.type === "task";
+}
+
+function validateTaskExecutionSnapshot(
+  issues: ValidationIssue[],
+  snapshot: TaskExecutionEvaluationSnapshot,
+  revision: TaskRevision,
+  task: Task,
+  path: string,
+): void {
+  if (snapshot.revisionId !== revision.id) {
+    addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.revisionId`, "Task evaluation snapshot revision must match its record");
+  }
+  const checks: readonly [string, readonly string[], ReadonlySet<string>][] = [
+    ["criteria", snapshot.criteria.map((value) => value.id), new Set(revision.snapshot.criteria.map((value) => value.id))],
+    ["deliverables", snapshot.deliverables.map((value) => value.id), new Set(revision.snapshot.deliverables.map((value) => value.id))],
+    ["dependencies", snapshot.dependencies.map((value) => value.id), new Set(revision.snapshot.dependencies.map((value) => value.id))],
+    ["challenges", snapshot.challenges.map((value) => value.id), new Set(task.challenges.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id))],
+    ["reviews", snapshot.reviews.map((value) => value.id), new Set(task.reviews.filter((value) => value.taskRevisionId === revision.id).map((value) => value.id))],
+    ["approvals", snapshot.approvals.map((value) => value.stageId), new Set(revision.snapshot.approvalPolicy?.stages.map((value) => value.id) ?? [])],
+  ];
+  for (const [name, ids, validIds] of checks) {
+    if (duplicates(ids).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.${name}`, `Task evaluation ${name} IDs must be unique`);
+    for (const id of ids) if (!validIds.has(id)) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.${name}`, `Task evaluation snapshot references missing ${name} target ${id}`);
+  }
+  const policy = revision.snapshot.evaluationPolicy;
+  for (const value of snapshot.criteria) {
+    if (!["not_started", "in_progress", "submitted", "verified", "failed", "waived"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.criteria.${value.id}.state`, "Criterion snapshot state is invalid");
+    const expected = value.state === "verified" || (value.state === "waived" && policy.waivedCriteriaSatisfyRequired);
+    if (value.satisfied !== expected) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.criteria.${value.id}`, "Criterion satisfaction does not match state and revision policy");
+  }
+  for (const value of snapshot.deliverables) {
+    if (!["missing", "submitted", "satisfied", "rejected", "waived"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.deliverables.${value.id}.state`, "Deliverable snapshot state is invalid");
+    const expected = value.state === "satisfied" || (value.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
+    if (value.satisfied !== expected) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.deliverables.${value.id}`, "Deliverable satisfaction does not match state and revision policy");
+  }
+  for (const value of snapshot.dependencies) {
+    const definition = revision.snapshot.dependencies.find((item) => item.id === value.id);
+    if (definition !== undefined && !sameDependencyDefinition(value, definition)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.dependencies.${value.id}`, "Dependency snapshot does not match its revision definition");
+  }
+  for (const value of snapshot.reviews) {
+    if (value.taskRevisionId !== revision.id) addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.reviews.${value.id}.taskRevisionId`, "Review snapshot must target the evaluated Task revision");
+    const review = task.reviews.find((item) => item.id === value.id && item.taskRevisionId === revision.id);
+    if (review !== undefined && (value.state !== review.state || value.result !== review.result)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.reviews.${value.id}`, "Review snapshot does not match its Task review record");
+  }
+  for (const value of snapshot.challenges) {
+    const challenge = task.challenges.find((item) => item.id === value.id && item.taskRevisionId === revision.id);
+    if (challenge !== undefined && (value.severity !== challenge.severity || !sameChallengeTarget(value.target, challenge.target))) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}`, "Challenge snapshot does not match its Task challenge record");
+    if (!["open", "under_review", "resolved", "rejected", "withdrawn", "reopened"].includes(value.state)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.challenges.${value.id}.state`, "Challenge snapshot state is invalid");
+    if (duplicates(value.evidence.map((item) => item.id)).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.challenges.${value.id}.evidence`, "Challenge evidence snapshot IDs must be unique");
+  }
+  for (const value of snapshot.approvals) {
+    if (value.taskRevisionId !== revision.id) addIssue(issues, "acceptance_snapshot_revision_mismatch", `${path}.approvals.${value.stageId}.taskRevisionId`, "Approval snapshot must target the evaluated Task revision");
+    const stage = revision.snapshot.approvalPolicy?.stages.find((item) => item.id === value.stageId);
+    if (stage !== undefined && value.requiredApprovalCount !== stage.requiredApprovalCount) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.approvals.${value.stageId}`, "Approval snapshot count does not match its revision stage");
+    if (duplicates(value.actorIds).length > 0 || value.effectiveApprovalCount !== value.actorIds.length) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.approvals.${value.stageId}.actorIds`, "Approval snapshot count must equal its distinct actor IDs");
+    if (stage !== undefined && value.satisfied !== (!stage.required || value.waived || value.effectiveApprovalCount >= stage.requiredApprovalCount)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.approvals.${value.stageId}.satisfied`, "Approval satisfaction does not match its stage and effective count");
+  }
+  const validRequirementIds = new Set([
+    ...revision.snapshot.criteria.flatMap((value) => value.artifactRequirementIds ?? []),
+    ...revision.snapshot.deliverables.flatMap((value) => value.artifactRequirementIds ?? []),
+  ]);
+  for (const value of snapshot.artifacts) {
+    if (!validRequirementIds.has(value.artifactRequirementId)) addIssue(issues, "missing_acceptance_snapshot_target", `${path}.artifacts`, `Artifact snapshot references missing requirement ${value.artifactRequirementId}`);
+    if (!["satisfied", "failed", "waived"].includes(value.outcome)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.artifacts.${value.artifactRequirementId}.outcome`, "Artifact snapshot outcome is invalid");
+  }
+  const sourceIds = (snapshot.sources ?? []).map((value) => value.linkId);
+  if (duplicates(sourceIds).length > 0) addIssue(issues, "duplicate_snapshot_id", `${path}.sources`, "Source snapshot link IDs must be unique");
+  for (const value of snapshot.sources ?? []) {
+    if (!nonEmpty(value.linkId) || !nonEmpty(value.artifactId) || !["reference", "context", "specification", "decision"].includes(value.role)) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.sources.${value.linkId}`, "Source snapshot is invalid");
+    if ((value.role === "specification" || value.role === "decision") && value.artifactVersionId === undefined) addIssue(issues, "incoherent_acceptance_snapshot", `${path}.sources.${value.linkId}.artifactVersionId`, "Definition-bearing Source snapshot must be version-pinned");
+  }
+}
 
 export function validateTaskProfile(profile: TaskProfile): readonly ValidationIssue[] {
   const issues: ValidationIssue[] = [];
@@ -67,14 +164,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
 
   // Timing validation
   if (task.timing !== undefined) {
-    if (task.timing.startsAt !== undefined && !nonEmpty(task.timing.startsAt)) {
-      addIssue(issues, "invalid_timing", "timing.startsAt", "Timing startsAt must be non-empty when present");
-    }
-    if (task.timing.dueAt !== undefined && !nonEmpty(task.timing.dueAt)) {
-      addIssue(issues, "invalid_timing", "timing.dueAt", "Timing dueAt must be non-empty when present");
-    }
+    const startsAt = task.timing.startsAt === undefined ? undefined : taskTimestampMilliseconds(task.timing.startsAt);
+    const dueAt = task.timing.dueAt === undefined ? undefined : taskTimestampMilliseconds(task.timing.dueAt);
+    if (task.timing.startsAt !== undefined && startsAt === undefined) addIssue(issues, "invalid_timing", "timing.startsAt", "Timing startsAt must be a valid timestamp");
+    if (task.timing.dueAt !== undefined && dueAt === undefined) addIssue(issues, "invalid_timing", "timing.dueAt", "Timing dueAt must be a valid timestamp");
     if (task.timing.startsAt !== undefined && task.timing.dueAt !== undefined) {
-      if (task.timing.dueAt < task.timing.startsAt) {
+      if (startsAt !== undefined && dueAt !== undefined && dueAt < startsAt) {
         addIssue(issues, "invalid_timing_range", "timing", "Timing dueAt must be greater than or equal to startsAt");
       }
     }
@@ -87,12 +182,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
       addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger`, "Reminder trigger is invalid");
     } else {
       if (reminder.trigger.type === "at") {
-        if (!Number.isFinite(Date.parse(reminder.trigger.at))) {
+        if (taskTimestampMilliseconds(reminder.trigger.at) === undefined) {
           addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.at`, "Reminder timestamp must be valid");
         }
       } else if (reminder.trigger.type === "before_due" || reminder.trigger.type === "after_start") {
-        if (!/^P(?!$)/u.test(reminder.trigger.duration)) {
-          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.duration`, "Reminder duration must be an ISO 8601 duration");
+        if (taskDurationMilliseconds(reminder.trigger.duration) === undefined) {
+          addIssue(issues, "invalid_reminder_trigger", `reminders.${reminder.id}.trigger.duration`, "Reminder duration must be a supported ISO 8601 duration");
         }
       }
     }
@@ -232,6 +327,9 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
         if (task.approvalRecords.indexOf(target) >= index) {
           addIssue(issues, "invalid_revocation_order", `approvalRecords.${record.id}`, "Grant must precede revocation");
         }
+        if (target.taskId !== record.taskId || target.stageId !== record.stageId || target.taskRevisionId !== record.taskRevisionId) {
+          addIssue(issues, "revocation_target_mismatch", `approvalRecords.${record.id}`, "Revocation target must share Task, stage, and revision");
+        }
       }
     }
   }
@@ -245,6 +343,8 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     const revision = revisions.get(acceptance.taskRevisionId);
     if (revision === undefined) {
       addIssue(issues, "missing_acceptance_revision", `acceptanceRecords.${acceptance.id}.taskRevisionId`, "Acceptance revision does not exist");
+    } else {
+      validateTaskExecutionSnapshot(issues, acceptance.snapshot, revision, task, `acceptanceRecords.${acceptance.id}.snapshot`);
     }
   }
   const currentAcceptance =
@@ -264,6 +364,15 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
     if (completion.taskId !== task.id) {
       addIssue(issues, "completion_task_mismatch", `completionRecords.${completion.id}.taskId`, "Completion belongs to another task");
     }
+    const revision = revisions.get(completion.taskRevisionId);
+    if (revision === undefined) {
+      addIssue(issues, "missing_completion_revision", `completionRecords.${completion.id}.taskRevisionId`, "Completion revision does not exist");
+    }
+    const hasAcceptance = completion.acceptanceId !== undefined;
+    const hasSnapshot = completion.evaluationSnapshot !== undefined;
+    if (hasAcceptance === hasSnapshot) {
+      addIssue(issues, "invalid_completion_proof", `completionRecords.${completion.id}`, "Completion must contain exactly one acceptance or direct evaluation proof");
+    }
     if (completion.acceptanceId !== undefined) {
       const acceptance = task.acceptanceRecords.find((record) => record.id === completion.acceptanceId);
       if (acceptance === undefined) {
@@ -272,6 +381,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
         addIssue(issues, "completion_revision_mismatch", `completionRecords.${completion.id}.taskRevisionId`, "Completion revision must match acceptance revision");
       }
     }
+    if (completion.evaluationSnapshot !== undefined && revision !== undefined) {
+      validateTaskExecutionSnapshot(issues, completion.evaluationSnapshot, revision, task, `completionRecords.${completion.id}.evaluationSnapshot`);
+    }
+    if (revision?.snapshot.evaluationPolicy.completionRequiresCurrentAcceptance === true && completion.acceptanceId === undefined) {
+      addIssue(issues, "missing_completion_acceptance", `completionRecords.${completion.id}.acceptanceId`, "Completion policy requires an acceptance proof");
+    }
   }
   const currentCompletion =
     task.currentCompletionId === undefined
@@ -279,6 +394,12 @@ export function validateTaskAggregate(task: Task, profile?: TaskProfile): readon
       : task.completionRecords.find((record) => record.id === task.currentCompletionId);
   if (task.currentCompletionId !== undefined && currentCompletion === undefined) {
     addIssue(issues, "missing_current_completion", "currentCompletionId", "Current completion does not exist");
+  }
+  if (currentCompletion !== undefined && currentCompletion.taskRevisionId !== task.currentRevisionId) {
+    addIssue(issues, "stale_current_completion", "currentCompletionId", "Current completion must target current revision");
+  }
+  if (currentCompletion?.acceptanceId !== undefined && (currentAcceptance === undefined || currentCompletion.acceptanceId !== currentAcceptance.id)) {
+    addIssue(issues, "completion_acceptance_mismatch", "currentCompletionId", "Acceptance-backed current completion must reference current acceptance");
   }
 
   if (profile !== undefined) {

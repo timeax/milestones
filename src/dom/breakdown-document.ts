@@ -3,6 +3,7 @@ import type {
   BreakdownDefinition,
   BreakdownId,
   ActorRef,
+  JsonValue,
   MilestoneArtifactContext,
   MilestoneGraphSnapshot,
   MilestoneId,
@@ -13,8 +14,8 @@ import { assertValidBreakdown } from "../services/validation.js";
 import { invariant } from "../model/errors.js";
 import { createMilestoneDocument } from "./builder.js";
 import type { MilestoneDocument } from "./document.js";
-import { createDefinitionDocument } from "./documents/index.js";
-import type { MilestoneDefinitionDocument, TextDocument } from "./types.js";
+import { createTextDocument } from "./documents/text.js";
+import type { TextDocument } from "./types.js";
 
 export type MilestoneProfileResolver = (profileRef: MilestoneProfileRef) => MilestoneProfile;
 export type MilestoneGraphResolver = (milestoneId: MilestoneId) => MilestoneGraphSnapshot | undefined;
@@ -37,13 +38,38 @@ export interface BreakdownDocumentBuildInput {
 export interface BreakdownDefinitionDocument {
   getTitle(): string;
   getDescription(): TextDocument;
-  getMetadata(): Readonly<Record<string, import("../model/domain.js").JsonValue>> | undefined;
+  getMetadata(): Readonly<Record<string, JsonValue>> | undefined;
   toObject(): BreakdownDefinition;
+}
+
+export interface BreakdownReadinessDocument {
+  canEvaluate(): boolean;
+  isReady(): boolean | undefined;
+  getIncompleteCount(): number;
+  getReadyCount(): number;
+  getBlockedCount(): number;
+  getUnknownCount(): number;
+  getReadyMilestoneIds(): readonly MilestoneId[];
+  getBlockedMilestoneIds(): readonly MilestoneId[];
+  getUnknownMilestoneIds(): readonly MilestoneId[];
+}
+
+class BreakdownDefinitionDocumentImpl implements BreakdownDefinitionDocument {
+  readonly #description: TextDocument;
+
+  constructor(private readonly value: BreakdownDefinition) {
+    this.#description = createTextDocument(value.description);
+  }
+
+  getTitle(): string { return this.value.title; }
+  getDescription(): TextDocument { return this.#description; }
+  getMetadata(): Readonly<Record<string, JsonValue>> | undefined { return structuredClone(this.value.metadata); }
+  toObject(): BreakdownDefinition { return structuredClone(this.value); }
 }
 
 export class BreakdownDocument {
   readonly #context: BreakdownDocumentContext;
-  #definition?: MilestoneDefinitionDocument;
+  #definition?: BreakdownDefinitionDocument;
   #milestones?: readonly MilestoneDocument[];
 
   constructor(context: BreakdownDocumentContext) {
@@ -76,8 +102,8 @@ export class BreakdownDocument {
     return this.#context.breakdown.updatedAt;
   }
 
-  getDefinition(): MilestoneDefinitionDocument {
-    return (this.#definition ??= createDefinitionDocument(this.#context.breakdown.definition));
+  getDefinition(): BreakdownDefinitionDocument {
+    return (this.#definition ??= new BreakdownDefinitionDocumentImpl(this.#context.breakdown.definition));
   }
 
   getDescription(): TextDocument {
@@ -100,18 +126,31 @@ export class BreakdownDocument {
     };
   }
 
-  getReadiness(): { isReady(): boolean; getIncompleteCount(): number; getBlockedCount(): number } {
-    const children = this.#context.breakdown.milestones;
-    const incomplete = children.filter((item) => item.currentCompletionId === undefined).length;
-    const blocked = children.filter((item) => item.challenges.some((challenge) =>
-      challenge.milestoneRevisionId === item.currentRevisionId
-      && challenge.severity === "blocking"
-      && (challenge.state === "open" || challenge.state === "under_review" || challenge.state === "reopened"),
-    )).length;
+  getReadiness(): BreakdownReadinessDocument {
+    const incomplete = this.#context.breakdown.milestones.filter((item) => item.currentCompletionId === undefined);
+    const ready: MilestoneId[] = [];
+    const blocked: MilestoneId[] = [];
+    const unknown: MilestoneId[] = [];
+    for (const milestone of incomplete) {
+      if (this.#context.profileResolver === undefined) {
+        unknown.push(milestone.id);
+        continue;
+      }
+      const readiness = this.#createChild(milestone).getReadiness().isReady();
+      if (readiness === true) ready.push(milestone.id);
+      else if (readiness === false) blocked.push(milestone.id);
+      else unknown.push(milestone.id);
+    }
     return {
-      isReady: () => blocked === 0,
-      getIncompleteCount: () => incomplete,
-      getBlockedCount: () => blocked,
+      canEvaluate: () => unknown.length === 0,
+      isReady: () => ready.length > 0 ? true : unknown.length > 0 ? undefined : false,
+      getIncompleteCount: () => incomplete.length,
+      getReadyCount: () => ready.length,
+      getBlockedCount: () => blocked.length,
+      getUnknownCount: () => unknown.length,
+      getReadyMilestoneIds: () => structuredClone(ready),
+      getBlockedMilestoneIds: () => structuredClone(blocked),
+      getUnknownMilestoneIds: () => structuredClone(unknown),
     };
   }
 

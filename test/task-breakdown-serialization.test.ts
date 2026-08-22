@@ -70,6 +70,8 @@ describe("Task & Breakdown Serialization & Migrations", () => {
     const taskWire = JSON.parse(await readFile(`${fixtures}task-full-v1.json`, "utf8"));
     const breakdownWire = JSON.parse(await readFile(`${fixtures}breakdown-full-v1.json`, "utf8"));
     expect(serializeTask(deserializeTask(taskWire))).toEqual(taskWire);
+    const directTaskWire = JSON.parse(await readFile(`${fixtures}task-direct-completed-v1.json`, "utf8"));
+    expect(serializeTask(deserializeTask(directTaskWire))).toEqual(directTaskWire);
     expect(serializeBreakdown(deserializeBreakdown(breakdownWire))).toEqual(breakdownWire);
   });
   it("serializes and deserializes Task wire and JSON representations accurately", () => {

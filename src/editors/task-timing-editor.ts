@@ -1,5 +1,6 @@
 import type { ActorRef, TaskTiming } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
+import { compareTaskTimestamps, parseTaskTimestamp } from "../services/task-time.js";
 import { emitTask } from "./internal/events.js";
 import { authorizeTask, ensureOpen, requiredText } from "./internal/helpers.js";
 import { beginMaterialTaskRevision } from "./internal/revision.js";
@@ -20,8 +21,10 @@ export interface TaskTimingEditor {
 
 export function createTaskTimingEditor(session: TaskEditorSession): TaskTimingEditor {
   function validateTimingRange(startsAt?: string, dueAt?: string): void {
+    if (startsAt !== undefined) parseTaskTimestamp(startsAt, "startsAt");
+    if (dueAt !== undefined) parseTaskTimestamp(dueAt, "dueAt");
     invariant(
-      startsAt === undefined || dueAt === undefined || dueAt >= startsAt,
+      startsAt === undefined || dueAt === undefined || compareTaskTimestamps(dueAt, startsAt) >= 0,
       "INVALID_ARGUMENT",
       "Timing dueAt must be greater than or equal to startsAt",
       { startsAt, dueAt },

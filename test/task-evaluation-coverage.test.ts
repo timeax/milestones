@@ -18,6 +18,7 @@ import {
   evaluateTaskCompletion,
   validateTaskGraph,
   type TaskArtifactContext,
+  type TaskArtifactLink,
   type TaskGraphSnapshot,
   type TaskProfile,
 } from "../src/index.js";
@@ -99,13 +100,14 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
       createdAt: "2026-08-20T12:00:00.000Z",
     };
 
+    const artifactLinks: TaskArtifactLink[] = [];
     const artifactsContext: TaskArtifactContext = {
       requirements: new Map([["req-1" as any, artifactRequirement]]),
       artifacts: new Map([["art-1" as any, artifact]]),
       versions: new Map([["ver-1" as any, version]]),
       submissions: new Map([["sub-1" as any, submission]]),
       verifications: new Map([["vrf-1" as any, verification]]),
-      links: [],
+      links: artifactLinks,
     };
 
     const editor = TaskEditor.create(
@@ -135,6 +137,29 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
 
     const critId = editor.task.criteria[0]!.id;
     const delivId = editor.task.deliverables[0]!.id;
+
+    artifactLinks.push(
+      {
+        schemaVersion: "1.1",
+        id: "requirement-link-crit" as any,
+        artifactId: "art-1" as any,
+        artifactVersionId: "ver-1" as any,
+        role: "evidence",
+        subject: { type: "criterion", id: critId },
+        createdBy: { id: "u1", type: "user" },
+        createdAt: "2026-08-20T12:00:00.000Z",
+      },
+      {
+        schemaVersion: "1.1",
+        id: "requirement-link-deliv" as any,
+        artifactId: "art-1" as any,
+        artifactVersionId: "ver-1" as any,
+        role: "deliverable",
+        subject: { type: "deliverable_requirement", id: delivId },
+        createdBy: { id: "u1", type: "user" },
+        createdAt: "2026-08-20T12:00:00.000Z",
+      },
+    );
 
     // Attach artifact link to criterion and deliverable
     editor.sources.attach(
@@ -173,14 +198,7 @@ describe("Task Evaluation & Graph Analysis Coverage", () => {
     const progress = calculateTaskProgress(editor.task);
     expect(progress.percentage).toBe(100);
 
-    const acceptEval = evaluateTaskAcceptance(editor.task, profile, undefined, {
-      ...artifactsContext,
-      links: [
-        ...(editor.task.sourceLinks ?? []),
-        ...editor.task.criteria.flatMap((c) => c.sourceLinks ?? []),
-        ...editor.task.deliverables.flatMap((d) => d.sourceLinks ?? []),
-      ],
-    });
+    const acceptEval = evaluateTaskAcceptance(editor.task, profile, undefined, artifactsContext);
     expect(acceptEval.reasons).toEqual([]);
     expect(acceptEval.accepted).toBe(true);
 

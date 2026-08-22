@@ -7,6 +7,7 @@ import type {
   TaskReminderTrigger,
 } from "../model/domain.js";
 import { invariant } from "../model/errors.js";
+import { parseTaskDuration, parseTaskTimestamp } from "../services/task-time.js";
 import { emitTask } from "./internal/events.js";
 import { authorizeTask, clone, ensureOpen } from "./internal/helpers.js";
 import type { TaskEditorSession } from "./internal/session.js";
@@ -27,9 +28,9 @@ export function createTaskReminderEditor(session: TaskEditorSession): TaskRemind
       invariant(false, "INVALID_ARGUMENT", "Invalid reminder trigger type");
     }
     if (trigger.type === "at") {
-      invariant(Number.isFinite(Date.parse(trigger.at)), "INVALID_ARGUMENT", "Reminder trigger timestamp must be valid");
+      parseTaskTimestamp(trigger.at, "Reminder trigger timestamp");
     } else {
-      invariant(/^P(?!$)/u.test(trigger.duration), "INVALID_ARGUMENT", "Reminder trigger duration must be an ISO 8601 duration");
+      parseTaskDuration(trigger.duration);
     }
   }
 

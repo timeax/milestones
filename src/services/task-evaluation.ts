@@ -88,28 +88,13 @@ export function evaluateTaskAcceptance(
   const policy = currentTaskPolicy(task);
   const reasons: EvaluationReason[] = [];
   const artifactSnapshots: ArtifactEvaluationSnapshot[] = [];
-  const effectiveArtifacts: TaskArtifactContext | undefined = artifacts === undefined ? undefined : {
-    requirements: artifacts.requirements,
-    artifacts: artifacts.artifacts,
-    versions: artifacts.versions,
-    submissions: artifacts.submissions,
-    verifications: artifacts.verifications,
-    links: (artifacts.links && artifacts.links.length > 0)
-      ? artifacts.links
-      : [
-          ...(task.sourceLinks ?? []),
-          ...task.criteria.flatMap((c) => c.sourceLinks ?? []),
-          ...task.deliverables.flatMap((d) => d.sourceLinks ?? []),
-        ],
-  };
-
   const criteria = task.criteria.map((criterion) => {
     const stateSatisfied =
       criterion.state === "verified" ||
       (criterion.state === "waived" && policy.waivedCriteriaSatisfyRequired);
     const artifactResult = evaluateArtifacts(
       { type: "criterion", id: criterion.id, requirementIds: criterion.artifactRequirementIds ?? [] },
-      effectiveArtifacts,
+      artifacts,
     );
     artifactSnapshots.push(...artifactResult.snapshots);
     if (criterion.required && policy.requiredCriteriaMustBeVerified) {
@@ -132,7 +117,7 @@ export function evaluateTaskAcceptance(
       (deliverable.state === "waived" && policy.waivedDeliverablesSatisfyRequired);
     const artifactResult = evaluateArtifacts(
       { type: "deliverable_requirement", id: deliverable.id, requirementIds: deliverable.artifactRequirementIds ?? [] },
-      effectiveArtifacts,
+      artifacts,
     );
     artifactSnapshots.push(...artifactResult.snapshots);
     if (deliverable.required && policy.requiredDeliverablesMustBeSatisfied) {
@@ -250,6 +235,7 @@ export function evaluateTaskCompletion(
 ): TaskCompletionEvaluation {
   const policy = currentTaskPolicy(task);
   const reasons: EvaluationReason[] = [];
+  let evaluationSnapshot: TaskAcceptanceEvaluation["snapshot"] | undefined;
   if (!profile.completion.enabled) {
     reasons.push({
       code: "profile_feature_disabled",
@@ -274,7 +260,12 @@ export function evaluateTaskCompletion(
     // For simple tasks without formal acceptance, evaluate requirements directly
     const acceptanceEval = evaluateTaskAcceptance(task, profile, graph, artifacts);
     reasons.push(...acceptanceEval.reasons);
+    evaluationSnapshot = acceptanceEval.snapshot;
   }
 
-  return { completable: reasons.length === 0, reasons: dedupeReasons(reasons) };
+  return {
+    completable: reasons.length === 0,
+    reasons: dedupeReasons(reasons),
+    ...(evaluationSnapshot === undefined ? {} : { evaluationSnapshot }),
+  };
 }

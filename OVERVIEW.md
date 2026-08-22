@@ -1106,6 +1106,8 @@ interface TaskAcceptance {
 }
 ```
 
+`TaskExecutionEvaluationSnapshot` is the Task-native immutable evaluation snapshot shape. `TaskAcceptanceSnapshot` is that same contract when stored by a formal acceptance; direct completion stores it on `TaskCompletion.evaluationSnapshot` instead.
+
 A Task acceptance snapshot MUST NOT contain `milestoneId` or `milestoneRevisionId` fields holding Task values.
 
 Task acceptance records are append-only.
@@ -1144,6 +1146,7 @@ interface TaskCompletion {
   taskId: TaskId;
   taskRevisionId: TaskRevisionId;
   acceptanceId?: AcceptanceId;
+  evaluationSnapshot?: TaskExecutionEvaluationSnapshot;
   completedAt: string;
   actor?: ActorRef;
   reason?: string;
@@ -1152,7 +1155,7 @@ interface TaskCompletion {
 
 If the Task profile requires acceptance, a valid completion MUST reference current acceptance for the same Task revision.
 
-If the profile does not require acceptance, completion MAY proceed directly after all enabled Task gates are satisfied and MUST NOT fabricate acceptance.
+If the profile does not require acceptance, completion MAY proceed directly after all enabled Task gates are satisfied and MUST NOT fabricate acceptance. A direct completion without `acceptanceId` MUST carry the immutable `TaskExecutionEvaluationSnapshot` that justified completion. An acceptance-backed completion MUST rely on its referenced acceptance snapshot and MUST NOT duplicate that proof in `evaluationSnapshot`.
 
 Task completion records are append-only.
 
@@ -1171,7 +1174,7 @@ all child Milestones accepted/completed
 
 Evaluators SHOULD return explainable results listing missing criteria, missing deliverables, unsatisfied dependencies, blocking challenges, incomplete reviews, pending approvals, Artifact Requirement failures, Artifact verification failures, and structured reasons.
 
-Historical acceptance snapshots are the normative boundary for reconstructing what was evaluated at that time.
+Historical acceptance snapshots are the normative boundary for reconstructing formal acceptance-backed evaluation. A direct Task completion's `TaskExecutionEvaluationSnapshot` is the equivalent normative boundary when no acceptance record exists.
 
 ---
 
