@@ -1,6 +1,6 @@
 # Stabilization and contract freeze
 
-The `0.1.x` line implements Milestone Protocol `1.1` while retaining a `0.x`
+The `0.1.x` line implements Milestone Protocol `1.3` while retaining a `0.x`
 package version for integration feedback. The following public contracts are
 frozen by the protocol version and package semantic-versioning policy:
 
