@@ -8,7 +8,7 @@ const root = new URL("..", import.meta.url);
 const temporaryDirectory = await mkdtemp(join(tmpdir(), "timeax-milestones-smoke-"));
 
 try {
-  execFileSync("npm", ["run", "build"], {
+  execFileSync("npm", ["run", "clean"], {
     cwd: root,
     stdio: "pipe",
     shell: process.platform === "win32",
@@ -21,6 +21,10 @@ try {
   const packed = JSON.parse(packOutput);
   if (!Array.isArray(packed) || typeof packed[0]?.filename !== "string") {
     throw new Error("npm pack did not return a tarball filename");
+  }
+  const packedPaths = new Set(packed[0].files?.map((file) => file.path));
+  if (!packedPaths.has("dist/index.js") || !packedPaths.has("dist/index.d.ts")) {
+    throw new Error("npm pack omitted built JavaScript or type declarations");
   }
 
   const tarball = join(temporaryDirectory, packed[0].filename);

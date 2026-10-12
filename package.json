@@ -1,6 +1,6 @@
 {
   "name": "@timeax/milestones",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Storage-neutral structured-execution lifecycle, evaluation, and Breakdown planning domain engine.",
   "type": "module",
   "sideEffects": false,
@@ -57,6 +57,7 @@
   "scripts": {
     "clean": "node scripts/clean.mjs",
     "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --coverage",
     "lint": "eslint src test --max-warnings=0",
