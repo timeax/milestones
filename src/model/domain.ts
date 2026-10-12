@@ -20,6 +20,7 @@ import type {
   ApprovalStageId,
   ChallengeEvidenceId,
   ChallengeId,
+  ClaimId,
   CompletionId,
   CriterionId,
   DeliverableRequirementId,
@@ -71,6 +72,7 @@ export interface MilestoneIdGenerator {
   acceptance(): AcceptanceId;
   completion(): CompletionId;
   event(): MilestoneEventId;
+  claim(): ClaimId;
 }
 
 export interface MilestoneProfileRef { readonly id: MilestoneProfileId; readonly version: number }
@@ -179,6 +181,28 @@ export interface MilestoneReview {
   readonly sourceLinks?: readonly MilestoneSourceLink[];
   readonly sourceSnapshot?: readonly MilestoneSourceSnapshot[];
 }
+
+export type MilestoneClaim =
+  | {
+      readonly id: ClaimId;
+      readonly milestoneId: MilestoneId;
+      readonly claimant: ActorRef;
+      readonly createdBy: ActorRef;
+      readonly state: "active";
+      readonly claimedAt: string;
+      readonly releasedAt?: never;
+      readonly releasedBy?: never;
+    }
+  | {
+      readonly id: ClaimId;
+      readonly milestoneId: MilestoneId;
+      readonly claimant: ActorRef;
+      readonly createdBy: ActorRef;
+      readonly state: "released";
+      readonly claimedAt: string;
+      readonly releasedAt: string;
+      readonly releasedBy?: ActorRef;
+    };
 
 export interface MilestoneApprovalPolicy { readonly stages: readonly ApprovalStage[] }
 export type ApprovalPolicySnapshot = MilestoneApprovalPolicy;
@@ -461,6 +485,7 @@ export interface Milestone {
   readonly dependencies: readonly MilestoneDependency[];
   readonly challenges: readonly MilestoneChallenge[];
   readonly reviews: readonly MilestoneReview[];
+  readonly claims: readonly MilestoneClaim[];
   readonly approvalPolicy?: MilestoneApprovalPolicy;
   readonly approvalRecords: readonly ApprovalRecord[];
   readonly acceptanceRecords: readonly MilestoneAcceptance[];
@@ -525,6 +550,8 @@ export type MilestoneChange =
   | { readonly type: "challenge_changed"; readonly challengeId: ChallengeId }
   | { readonly type: "challenge_evidence_changed"; readonly challengeId: ChallengeId; readonly challengeEvidenceId: ChallengeEvidenceId }
   | { readonly type: "review_changed"; readonly reviewId: ReviewId }
+  | { readonly type: "claim_created"; readonly claimId: ClaimId }
+  | { readonly type: "claim_released"; readonly claimId: ClaimId }
   | { readonly type: "approval_recorded"; readonly approvalRecordId: ApprovalRecordId }
   | { readonly type: "approval_policy_changed"; readonly approvalStageId: ApprovalStageId }
   | { readonly type: "profile_changed"; readonly profile: MilestoneProfileRef }
@@ -564,6 +591,8 @@ export type ChallengeEvidenceWithdrawnEvent = EventBase<"challenge.evidence_with
 export type ReviewRequestedEvent = EventBase<"review.requested", { readonly review: MilestoneReview }>;
 export type ReviewChangedEvent = EventBase<"review.changed", { readonly reviewId: ReviewId; readonly state: ReviewState }>;
 export type ReviewCompletedEvent = EventBase<"review.completed", { readonly reviewId: ReviewId; readonly result: ReviewResult }>;
+export type ClaimCreatedEvent = EventBase<"claim.created", { readonly claim: Extract<MilestoneClaim, { readonly state: "active" }> }>;
+export type ClaimReleasedEvent = EventBase<"claim.released", { readonly claimId: ClaimId; readonly releasedAt: string; readonly releasedBy?: ActorRef }>;
 export type ApprovalRecordedEvent = EventBase<"approval.recorded", { readonly record: ApprovalGrantedRecord | ApprovalRejectedRecord | ApprovalWaivedRecord }>;
 export type ApprovalRevokedEvent = EventBase<"approval.revoked", { readonly record: ApprovalRevokedRecord }>;
 export type ApprovalStageAddedEvent = EventBase<"approval_stage.added", { readonly stage: ApprovalStage }>;
@@ -573,7 +602,7 @@ export type ProfileChangedEvent = EventBase<"profile.changed", { readonly profil
 export type MilestoneAcceptedEvent = EventBase<"milestone.accepted", { readonly acceptance: MilestoneAcceptance }>;
 export type MilestoneCompletedEvent = EventBase<"milestone.completed", { readonly completion: MilestoneCompletion }>;
 export type MilestoneReopenedEvent = EventBase<"milestone.reopened", { readonly effect: ReopenEffect; readonly reason: string; readonly cause?: ReopenCause }>;
-export type MilestoneEvent = MilestoneCreatedEvent | SourceAttachedEvent | SourceDetachedEvent | SourceReplacedEvent | SourceRoleChangedEvent | SourceChangedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ChallengeEvidenceAddedEvent | ChallengeEvidenceSupersededEvent | ChallengeEvidenceWithdrawnEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | ApprovalStageAddedEvent | ApprovalStageChangedEvent | ApprovalStageRemovedEvent | ProfileChangedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
+export type MilestoneEvent = MilestoneCreatedEvent | SourceAttachedEvent | SourceDetachedEvent | SourceReplacedEvent | SourceRoleChangedEvent | SourceChangedEvent | MilestoneRevisedEvent | DefinitionChangedEvent | CriterionAddedEvent | CriterionChangedEvent | CriterionRemovedEvent | DeliverableAddedEvent | DeliverableChangedEvent | DeliverableRemovedEvent | DependencyAddedEvent | DependencyChangedEvent | DependencyRemovedEvent | ChallengeRaisedEvent | ChallengeChangedEvent | ChallengeResolvedEvent | ChallengeEvidenceAddedEvent | ChallengeEvidenceSupersededEvent | ChallengeEvidenceWithdrawnEvent | ReviewRequestedEvent | ReviewChangedEvent | ReviewCompletedEvent | ClaimCreatedEvent | ClaimReleasedEvent | ApprovalRecordedEvent | ApprovalRevokedEvent | ApprovalStageAddedEvent | ApprovalStageChangedEvent | ApprovalStageRemovedEvent | ProfileChangedEvent | MilestoneAcceptedEvent | MilestoneCompletedEvent | MilestoneReopenedEvent;
 
 export interface MilestoneEditResult {
   readonly milestone: Milestone;
@@ -584,13 +613,14 @@ export interface MilestoneEditResult {
   readonly affectedMilestoneIds?: readonly MilestoneId[];
 }
 
-export interface MilestoneWire extends Omit<Milestone, "criteria" | "deliverables" | "dependencies" | "challenges" | "reviews" | "approvalRecords" | "acceptanceRecords" | "completionRecords" | "revisions"> {
-  readonly schemaVersion: "1.2";
+export interface MilestoneWire extends Omit<Milestone, "criteria" | "deliverables" | "dependencies" | "challenges" | "reviews" | "claims" | "approvalRecords" | "acceptanceRecords" | "completionRecords" | "revisions"> {
+  readonly schemaVersion: "1.3";
   readonly criteria: readonly Criterion[];
   readonly deliverables: readonly DeliverableRequirement[];
   readonly dependencies: readonly MilestoneDependency[];
   readonly challenges: readonly MilestoneChallenge[];
   readonly reviews: readonly MilestoneReview[];
+  readonly claims: readonly MilestoneClaim[];
   readonly approvalRecords: readonly ApprovalRecord[];
   readonly acceptanceRecords: readonly MilestoneAcceptance[];
   readonly completionRecords: readonly MilestoneCompletion[];

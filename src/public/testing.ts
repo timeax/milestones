@@ -15,6 +15,7 @@ export {
   asBreakdownId,
   asChallengeEvidenceId,
   asChallengeId,
+  asClaimId,
   asCompletionId,
   asCriterionId,
   asDeliverableRequirementId,

@@ -6,6 +6,7 @@ import type {
   BreakdownEventId,
   BreakdownIdGenerator,
   ChallengeId,
+  ClaimId,
   ChallengeEvidenceId,
   ChallengeTarget,
   CriterionId,
@@ -27,6 +28,8 @@ import type {
 import type { TaskGraphSnapshot } from "../services/task-graph.js";
 
 export type MilestoneAction =
+  | "claim.create"
+  | "claim.release"
   | "criterion.verify"
   | "criterion.waive"
   | "deliverable.satisfy"
@@ -53,6 +56,7 @@ export type MilestoneAction =
 
 export type MilestoneActionSubject =
   | { readonly type: "milestone" }
+  | { readonly type: "claim"; readonly claimId: ClaimId }
   | { readonly type: "criterion"; readonly criterionId: CriterionId }
   | { readonly type: "deliverable_requirement"; readonly deliverableRequirementId: DeliverableRequirementId }
   | { readonly type: "challenge"; readonly challengeId: ChallengeId }

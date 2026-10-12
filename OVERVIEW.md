@@ -47,6 +47,7 @@ The package owns:
 - dependency-graph and Task-scope graph evaluation;
 - challenges;
 - reviews;
+- Milestone claims;
 - approvals;
 - acceptance;
 - completion;
@@ -73,6 +74,7 @@ It does **not** own:
 - notification delivery;
 - host authorization policy;
 - host visibility policy;
+- Project-wide allocation policy, capacity, and manager assignments;
 - Project implementation;
 - Project Version or release-plan membership;
 - planning evolution such as `upgrades`, `extends`, or `replaces`;
@@ -301,6 +303,7 @@ type MilestoneId = Brand<string, "MilestoneId">;
 type MilestoneProfileId = Brand<string, "MilestoneProfileId">;
 type MilestoneRevisionId = Brand<string, "MilestoneRevisionId">;
 type MilestoneEventId = Brand<string, "MilestoneEventId">;
+type ClaimId = Brand<string, "ClaimId">;
 
 type TaskId = Brand<string, "TaskId">;
 type TaskProfileId = Brand<string, "TaskProfileId">;
@@ -358,6 +361,7 @@ interface MilestoneIdGenerator {
   acceptance(): AcceptanceId;
   completion(): CompletionId;
   event(): MilestoneEventId;
+  claim(): ClaimId;
 }
 
 interface TaskIdGenerator {
@@ -406,6 +410,7 @@ interface Milestone {
 
   challenges: readonly MilestoneChallenge[];
   reviews: readonly MilestoneReview[];
+  claims: readonly MilestoneClaim[];
 
   approvalPolicy?: MilestoneApprovalPolicy;
   approvalRecords: readonly ApprovalRecord[];
@@ -423,6 +428,12 @@ interface Milestone {
 ```
 
 A Milestone is a formal planned outcome.
+
+A Milestone claim records an opaque actor's intent to participate in that Milestone. Multiple actors MAY hold active claims. One actor MUST NOT have more than one active claim on the same Milestone. A released claim remains in history; claiming again creates a new ID. New claims MUST be rejected after current completion. Existing claims MAY be released at any time. Claims do not grant authority, reserve Project capacity, or assign work. Hosts decide who may claim or release and own Project-wide allocation policy and manager assignments.
+
+Each claim has a stable `ClaimId`, its `MilestoneId`, claimant and creator `ActorRef`s, `claimedAt`, and a discriminated `active` or `released` state. A released claim also has `releasedAt` and MAY have `releasedBy`. The pair `(claimant.type, claimant.id)` identifies one claimant for the active-claim uniqueness rule. Claim timestamps MUST be valid and release MUST NOT precede creation.
+
+Claim and release are operational Milestone mutations. They MUST emit typed events, advance sequence, and preserve the claim's creation and release attribution. They MUST NOT independently create a revision, change progress, gate acceptance or completion, or invalidate lifecycle pointers. A claim's state is either `active` or `released`; release is terminal for that claim ID.
 
 `currentAcceptanceId` and `currentCompletionId` are the only authoritative indicators of current Milestone acceptance and completion.
 
@@ -1350,6 +1361,7 @@ class MilestoneEditor {
   readonly challenges: ChallengeEditor;
   readonly evidence: EvidenceEditor;
   readonly reviews: ReviewEditor;
+  readonly claims: MilestoneClaimEditor;
   readonly approvals: ApprovalEditor;
   readonly revisions: RevisionEditor;
   readonly history: MilestoneEditorHistory;
@@ -1366,7 +1378,7 @@ class MilestoneEditor {
 }
 ```
 
-Existing Milestone public behavior and Milestone Wire 1.2 compatibility MUST remain stable while shared internals evolve.
+Existing Milestone public behavior and historical Milestone Wire 1.2 migration compatibility MUST remain stable while shared internals evolve.
 
 ### 14.2 TaskEditor
 
@@ -1680,7 +1692,7 @@ Protocols evolve independently per aggregate.
 The current intended protocol identities are:
 
 ```text
-Milestone Protocol: 1.2
+Milestone Protocol: 1.3
 Task Protocol:      1.0
 Breakdown Protocol: 1.0
 ```
@@ -1689,11 +1701,11 @@ Do not document these as one universal migration chain such as `1.0 -> 1.1 -> 1.
 
 ### 16.1 Milestone Wire
 
-Milestone Wire 1.2 remains the existing storage-neutral serialized representation and MUST preserve backward compatibility unless a future deliberate Milestone protocol revision is made.
+Milestone Wire 1.3 adds the Milestone claims collection. Valid 1.2 records migrate to 1.3 with an empty claims collection. Historical 1.2 fixture meaning MUST remain unchanged.
 
 Source Links and historical Source snapshots remain represented according to the established 1.2 contract.
 
-Valid 1.1 Milestone wire records remain valid historical input to a compatible 1.2 hydrator. Hydration MUST NOT fabricate Sources.
+Valid 1.1 Milestone wire records remain valid historical input through the Milestone migration path. Hydration MUST NOT fabricate Sources.
 
 ### 16.2 Task Wire
 
@@ -1827,11 +1839,12 @@ These external records remain outside the package.
 48. Task creation produces a typed `task.created` event and created change; Breakdown creation produces `breakdown.created` and created change.
 49. Same-logical-requirement edits preserve child identity; semantic replacement creates new identity.
 50. Source, evidence, deliverable, verification, and Artifact provenance relationships remain semantically distinct even when they reference the same Artifact.
-51. Milestone Wire 1.2 remains compatible with its established contract.
+51. Milestone Wire 1.2 remains compatible through migration to 1.3 without changing historical lifecycle meaning.
 52. Task Wire 1.0 and Breakdown Wire 1.0 are independent protocols and MUST round-trip without Milestone/Task identity confusion.
 53. Breakdown serialization reuses canonical Milestone wire serialization for children.
 54. Public editor/DOM types SHOULD remain strongly typed; widespread `as any`/`as never` must not substitute for a correct shared execution abstraction.
 55. Strict typecheck/lint/test/build/package/runtime validation is part of completion for a production-quality reusable SDK.
+56. Milestone claims are nonexclusive per Milestone, with at most one active claim per actor; released records remain historical and claims never gate execution evaluation.
 
 ---
 
@@ -1863,7 +1876,7 @@ These external records remain outside the package.
 │   ├── Reopening / Invalidation
 │   ├── MilestoneEditor
 │   ├── MilestoneDocument
-│   └── Milestone Wire 1.2
+│   └── Milestone Wire 1.3
 │
 ├── Task
 │   ├── TaskProfile
@@ -1966,7 +1979,7 @@ Before Task Protocol 1.0 and Breakdown Protocol 1.0 are treated as frozen public
 - Breakdown DOM exposes the intended plan semantics while reusing ordinary Milestone documents;
 - Source/evidence/verification/provenance vocabulary remains deliberately separated;
 - historical Task revisions/reviews/approvals/acceptances/Sources remain reproducible;
-- Milestone Wire 1.2 golden compatibility remains green;
+- Milestone Wire 1.2 golden migration compatibility remains green;
 - Task Wire 1.0 and Breakdown Wire 1.0 round-trip fixtures are green;
 - README/examples compile against actual public APIs;
 - Node and Bun validation pipelines pass completely;

@@ -1,5 +1,7 @@
 import type {
   MilestoneId,
+  MilestoneClaim,
+  ClaimId,
   MilestoneProfile,
   MilestoneProfileId,
 } from "../model/domain.js";
@@ -23,6 +25,7 @@ import type {
   MilestoneDefinitionDocument,
   MilestoneDocumentContext,
   MilestoneDocumentContract,
+  MilestoneClaimsDocument,
   MilestoneOverviewDocument,
   MilestoneProfileDocument,
   MilestoneProgressDocument,
@@ -217,6 +220,9 @@ export class MilestoneDocument
 
   #reviews:
     ReviewsDocument | undefined;
+
+  #claims:
+    MilestoneClaimsDocument | undefined;
 
   #approvals:
     ApprovalsDocument | undefined;
@@ -447,6 +453,18 @@ export class MilestoneDocument
           this.#context,
         )
     );
+  }
+
+  getClaims(): MilestoneClaimsDocument {
+    return this.#claims ??= {
+      getAll: (): readonly MilestoneClaim[] => structuredClone(this.#context.milestone.claims),
+      getActive: (): readonly MilestoneClaim[] => structuredClone(this.#context.milestone.claims.filter((claim) => claim.state === "active")),
+      getById: (id: ClaimId): MilestoneClaim | undefined => {
+        const claim = this.#context.milestone.claims.find((item) => item.id === id);
+        return claim === undefined ? undefined : structuredClone(claim);
+      },
+      getActiveCount: (): number => this.#context.milestone.claims.filter((claim) => claim.state === "active").length,
+    };
   }
 
   /* ---------------------------------------------------------------------- */

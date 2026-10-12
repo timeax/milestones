@@ -7,6 +7,7 @@ export * from "./dependency-editor.js";
 export * from "./challenge-editor.js";
 export * from "./evidence-editor.js";
 export * from "./review-editor.js";
+export * from "./claim-editor.js";
 export * from "./approval-editor.js";
 export * from "./revision-editor.js";
 export * from "./source-editor.js";

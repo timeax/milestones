@@ -31,6 +31,8 @@ import type {
   EvaluationReasonCode,
   JsonValue,
   Milestone,
+  MilestoneClaim,
+  ClaimId,
   MilestoneArtifactContext,
   MilestoneDependencyGate,
   MilestoneGraphSnapshot,
@@ -1646,6 +1648,8 @@ export interface MilestoneDocumentContract {
 
   getReviews(): ReviewsDocument;
 
+  getClaims(): MilestoneClaimsDocument;
+
   getApprovals(): ApprovalsDocument;
 
   getRevisions(): RevisionsDocument;
@@ -1653,5 +1657,12 @@ export interface MilestoneDocumentContract {
   getAcceptanceStatus(): AcceptanceStatusDocument;
 
   getCompletionStatus(): CompletionStatusDocument;
+}
+
+export interface MilestoneClaimsDocument {
+  getAll(): readonly MilestoneClaim[];
+  getActive(): readonly MilestoneClaim[];
+  getById(id: ClaimId): MilestoneClaim | undefined;
+  getActiveCount(): number;
 }
 

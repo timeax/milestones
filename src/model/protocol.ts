@@ -1,4 +1,4 @@
-export const MILESTONE_PROTOCOL_VERSION = "1.2" as const;
+export const MILESTONE_PROTOCOL_VERSION = "1.3" as const;
 export type MilestoneProtocolVersion = typeof MILESTONE_PROTOCOL_VERSION;
 export const TASK_PROTOCOL_VERSION = "1.0" as const;
 export type TaskProtocolVersion = typeof TASK_PROTOCOL_VERSION;

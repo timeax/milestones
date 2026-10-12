@@ -8,6 +8,7 @@ import type {
   BreakdownIdGenerator,
   ChallengeEvidenceId,
   ChallengeId,
+  ClaimId,
   CompletionId,
   CriterionId,
   DeliverableRequirementId,
@@ -59,6 +60,7 @@ export class SequenceMilestoneIdGenerator implements MilestoneIdGenerator {
   public acceptance(): AcceptanceId { return this.next("acceptance") as AcceptanceId; }
   public completion(): CompletionId { return this.next("completion") as CompletionId; }
   public event(): MilestoneEventId { return this.next("event") as MilestoneEventId; }
+  public claim(): ClaimId { return this.next("claim") as ClaimId; }
 }
 
 export class SequenceTaskIdGenerator implements TaskIdGenerator {
@@ -94,6 +96,7 @@ export {
   asMilestoneProfileId,
   asMilestoneRevisionId,
   asMilestoneEventId,
+  asClaimId,
   asTaskId,
   asTaskProfileId,
   asTaskRevisionId,

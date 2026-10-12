@@ -74,6 +74,7 @@ export {
   type BreakdownMigrationResult,
 } from "./migrations/index.js";
 export { MilestoneEditor } from "./editors/milestone-editor.js";
+export { MilestoneClaimEditor } from "./editors/claim-editor.js";
 export { TaskEditor } from "./editors/task-editor.js";
 export { BreakdownEditor } from "./editors/breakdown-editor.js";
 export type {

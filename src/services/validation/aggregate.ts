@@ -63,6 +63,27 @@ export function validateMilestoneAggregate(milestone: Milestone, profile?: Miles
     } else if (review.result !== undefined || review.completedAt !== undefined || review.completedBy !== undefined) addIssue(issues, "unexpected_review_result", `reviews.${review.id}`, "Only a completed review may carry completion data");
   }
 
+  if (!Array.isArray(milestone.claims)) addIssue(issues, "missing_claims", "claims", "Milestone claims must be an array");
+  const claims: Milestone["claims"] = Array.isArray(milestone.claims) ? milestone.claims as Milestone["claims"] : [];
+  validateUniqueIds(issues, claims, "claims");
+  const activeClaimants = new Set<string>();
+  for (const claim of claims) {
+    const path = `claims.${claim.id}`;
+    if (claim.milestoneId !== milestone.id) addIssue(issues, "claim_milestone_mismatch", `${path}.milestoneId`, "Claim belongs to another milestone");
+    if (typeof claim.claimant?.id !== "string" || !nonEmpty(claim.claimant.id) || (claim.claimant.type !== undefined && typeof claim.claimant.type !== "string") || (claim.claimant.label !== undefined && typeof claim.claimant.label !== "string")) addIssue(issues, "invalid_claimant", `${path}.claimant`, "Claimant must be a valid opaque actor reference");
+    if (typeof claim.createdBy?.id !== "string" || !nonEmpty(claim.createdBy.id) || (claim.createdBy.type !== undefined && typeof claim.createdBy.type !== "string") || (claim.createdBy.label !== undefined && typeof claim.createdBy.label !== "string")) addIssue(issues, "invalid_claim_creator", `${path}.createdBy`, "Claim creator must be a valid opaque actor reference");
+    if (!Number.isFinite(Date.parse(claim.claimedAt))) addIssue(issues, "invalid_claim_time", `${path}.claimedAt`, "Claim time must be a valid timestamp");
+    if (claim.state === "active") {
+      if (claim.releasedAt !== undefined || claim.releasedBy !== undefined) addIssue(issues, "invalid_active_claim", path, "Active claim cannot carry release details");
+      const key = JSON.stringify([claim.claimant?.type, claim.claimant?.id]);
+      if (activeClaimants.has(key)) addIssue(issues, "duplicate_active_claim", path, "Actor already has an active claim");
+      activeClaimants.add(key);
+    } else if (claim.state === "released") {
+      if (!Number.isFinite(Date.parse(claim.releasedAt)) || Date.parse(claim.releasedAt) < Date.parse(claim.claimedAt)) addIssue(issues, "invalid_claim_release_time", `${path}.releasedAt`, "Release time must be valid and follow claim time");
+      if (claim.releasedBy !== undefined && (typeof claim.releasedBy?.id !== "string" || !nonEmpty(claim.releasedBy.id) || (claim.releasedBy.type !== undefined && typeof claim.releasedBy.type !== "string") || (claim.releasedBy.label !== undefined && typeof claim.releasedBy.label !== "string"))) addIssue(issues, "invalid_claim_release_actor", `${path}.releasedBy`, "Release actor must be a valid opaque actor reference");
+    } else addIssue(issues, "invalid_claim_state", `${path}.state`, "Claim state is invalid");
+  }
+
   validateUniqueIds(issues, milestone.challenges, "challenges");
   const evidenceIds = new Set<string>();
   for (const challenge of milestone.challenges) {

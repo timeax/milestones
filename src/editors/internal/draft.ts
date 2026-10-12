@@ -5,6 +5,7 @@ import type {
   Criterion,
   DeliverableRequirement,
   Milestone,
+  MilestoneClaim,
   MilestoneChallenge,
   MilestoneDependency,
   MilestoneReview,
@@ -33,6 +34,7 @@ export interface DraftMilestone extends Omit<
   | "dependencies"
   | "challenges"
   | "reviews"
+  | "claims"
   | "approvalRecords"
   | "acceptanceRecords"
   | "completionRecords"
@@ -43,6 +45,7 @@ export interface DraftMilestone extends Omit<
   dependencies: MilestoneDependency[];
   challenges: (Omit<Mutable<MilestoneChallenge>, "evidence"> & { evidence: Mutable<ChallengeEvidence>[] })[];
   reviews: Mutable<MilestoneReview>[];
+  claims: MilestoneClaim[];
   approvalRecords: ApprovalRecord[];
   acceptanceRecords: Milestone["acceptanceRecords"][number][];
   completionRecords: Milestone["completionRecords"][number][];

@@ -32,6 +32,7 @@ import { DeliverableEditor, createDeliverableEditor } from "./deliverable-editor
 import { DependencyEditor, createDependencyEditor } from "./dependency-editor.js";
 import { EvidenceEditor, createEvidenceEditor } from "./evidence-editor.js";
 import type { MilestoneEditorOptions } from "./editor-contracts.js";
+import { MilestoneClaimEditor } from "./claim-editor.js";
 import {
   createHistoryState,
   historyAwareCommands,
@@ -59,6 +60,7 @@ export class MilestoneEditor {
   public readonly challenges: ChallengeEditor;
   public readonly evidence: EvidenceEditor;
   public readonly reviews: ReviewEditor;
+  public readonly claims: MilestoneClaimEditor;
   public readonly approvals: ApprovalEditor;
   public readonly revisions: RevisionEditor;
   public readonly history: MilestoneEditorHistory;
@@ -110,6 +112,7 @@ export class MilestoneEditor {
     this.challenges = historyAwareCommands(this.session, createChallengeEditor(this.session));
     this.evidence = historyAwareCommands(this.session, createEvidenceEditor(this.session));
     this.reviews = historyAwareCommands(this.session, createReviewEditor(this.session));
+    this.claims = historyAwareCommands(this.session, new MilestoneClaimEditor(this.session));
     this.approvals = historyAwareCommands(this.session, createApprovalEditor(this.session));
     this.revisions = historyAwareCommands(this.session, createRevisionEditor(this.session));
   }
@@ -175,6 +178,7 @@ export class MilestoneEditor {
       dependencies,
       challenges: [],
       reviews: [],
+      claims: [],
       ...(approvalPolicy === undefined ? {} : { approvalPolicy }),
       approvalRecords: [],
       acceptanceRecords: [],

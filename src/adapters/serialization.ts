@@ -119,6 +119,7 @@ export function deserializeMilestone(value: unknown): Milestone {
     "dependencies",
     "challenges",
     "reviews",
+    "claims",
     "approvalPolicy",
     "approvalRecords",
     "acceptanceRecords",
@@ -149,12 +150,27 @@ export function deserializeMilestone(value: unknown): Milestone {
         "dependencies",
         "challenges",
         "reviews",
+        "claims",
         "approvalRecords",
         "acceptanceRecords",
         "completionRecords",
       ].every((key) => Array.isArray(milestone[key])),
     "SERIALIZATION_INVALID",
     "Malformed milestone wire record",
+  );
+  invariant(
+    (milestone["claims"] as unknown[]).every((claim) =>
+      isRecord(claim) &&
+      typeof claim["id"] === "string" &&
+      typeof claim["milestoneId"] === "string" &&
+      isRecord(claim["claimant"]) &&
+      typeof claim["claimant"]["id"] === "string" &&
+      isRecord(claim["createdBy"]) &&
+      typeof claim["createdBy"]["id"] === "string" &&
+      typeof claim["state"] === "string" &&
+      typeof claim["claimedAt"] === "string"),
+    "SERIALIZATION_INVALID",
+    "Malformed milestone claim wire record",
   );
   // The wire boundary is narrowed structurally above, then fully checked by the domain validator.
   assertValidMilestone(milestone as unknown as Milestone);

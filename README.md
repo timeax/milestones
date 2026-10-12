@@ -30,6 +30,7 @@ Source != evidence != deliverable != Artifact Requirement != verification
 - Focused `MilestoneEditor`, `TaskEditor`, and `BreakdownEditor` facades backed by shared draft transactions.
 - Deterministic evaluation with explicit clocks, ID generators, dependency graphs, and Artifact contexts.
 - Typed domain errors, changes, and events with monotonic per-aggregate sequences.
+- Nonexclusive Milestone claims with opaque actor references and release history.
 - Revision-bound reviews plus append-only revisions, approval history, acceptances, completions, and challenge evidence.
 - Explicit lifecycle invalidation and reopening without deleting historical facts.
 - Milestone dependency graphs, mixed Task dependency graphs, Task-scope cycle detection, and Breakdown hierarchy validation.
@@ -107,6 +108,8 @@ console.log(result.events.map((event) => event.type));
 ```
 
 The deterministic helpers are convenient for examples and fixtures. Production hosts should inject clocks and durable opaque-ID generators appropriate to their environment.
+
+Milestone claims are edited through `MilestoneEditor.claims.claim(claimant)` and `.release(claimId, actor)`. A claim records participation intent; it does not change execution progress or gate acceptance. Hosts own authorization and Project-wide allocation policy.
 
 ## Working with editors
 
@@ -256,7 +259,7 @@ Each aggregate has its own wire protocol and migration path:
 
 | Aggregate | Current protocol |
 | --- | --- |
-| Milestone | `1.2` |
+| Milestone | `1.3` |
 | Task | `1.0` |
 | Breakdown | `1.0` |
 

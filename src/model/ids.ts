@@ -5,6 +5,7 @@ export type MilestoneId = Brand<string, "MilestoneId">;
 export type MilestoneProfileId = Brand<string, "MilestoneProfileId">;
 export type MilestoneRevisionId = Brand<string, "MilestoneRevisionId">;
 export type MilestoneEventId = Brand<string, "MilestoneEventId">;
+export type ClaimId = Brand<string, "ClaimId">;
 
 // Task Root IDs
 export type TaskId = Brand<string, "TaskId">;
@@ -34,6 +35,7 @@ export const asMilestoneId = (value: string): MilestoneId => value as MilestoneI
 export const asMilestoneProfileId = (value: string): MilestoneProfileId => value as MilestoneProfileId;
 export const asMilestoneRevisionId = (value: string): MilestoneRevisionId => value as MilestoneRevisionId;
 export const asMilestoneEventId = (value: string): MilestoneEventId => value as MilestoneEventId;
+export const asClaimId = (value: string): ClaimId => value as ClaimId;
 
 export const asTaskId = (value: string): TaskId => value as TaskId;
 export const asTaskProfileId = (value: string): TaskProfileId => value as TaskProfileId;

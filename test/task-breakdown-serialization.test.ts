@@ -139,7 +139,7 @@ describe("Task & Breakdown Serialization & Migrations", () => {
     expect(wire.schemaVersion).toBe("1.0");
     expect(wire.id).toBe("bd-ser-1");
     expect(wire.milestones.length).toBe(1);
-    expect(wire.milestones[0]!.schemaVersion).toBe("1.2");
+    expect(wire.milestones[0]!.schemaVersion).toBe("1.3");
 
     const deserialized = deserializeBreakdown(wire);
     expect(deserialized.id).toBe("bd-ser-1");
@@ -166,6 +166,11 @@ describe("Task & Breakdown Serialization & Migrations", () => {
     expect(migrationResult.toVersion).toBe("1.0");
     const migratedBreakdown = migrateAndDeserializeBreakdown(wire);
     expect(migratedBreakdown.id).toBe("bd-ser-1");
+    const oldChild = { ...wire.milestones[0]!, schemaVersion: "1.2" } as Record<string, unknown>;
+    delete oldChild["claims"];
+    const migratedOldBreakdown = migrateBreakdownWire({ ...wire, milestones: [oldChild] });
+    expect(migratedOldBreakdown.appliedMigrations).toEqual(["milestone:1.2-to-1.3"]);
+    expect(migratedOldBreakdown.wire.milestones[0]?.claims).toEqual([]);
   });
 
   it("serializes and deserializes TaskGraphSnapshot with tasks and milestones", () => {
